@@ -1,0 +1,15 @@
+{
+  "git.detectSubmodules": true,
+  "git.autoRepositoryDetection": true,
+  "git.scanRepositories": [
+    "services/management-service",
+    "mcp-servers/rostering",
+    "mcp-servers/context",
+    "pkg",
+    "frontend/web",
+    "agents/rostering",
+    "sdk/rostering"
+  ]
+}
+
+

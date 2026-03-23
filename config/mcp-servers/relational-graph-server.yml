@@ -1,0 +1,29 @@
+discovery:
+  nacos:
+    groupName: "mcp-server"
+
+neo4j:
+  uri: "bolt://192.168.40.238:7687"
+  username: "neo4j"
+  password: "jusha1996"
+  database: "scheduling"
+  max_connections: 50
+  connection_timeout: "30s"
+  max_transaction_retry_time: "15s"
+
+extractor:
+  max_concurrency: 8
+  enable_ai: true
+
+tools:
+  enabled_tools:
+    - knowledge_extraction
+    - knowledge_query
+
+prompts:
+  enabled: false
+  source: "file"
+  local_path: "./prompts"
+
+ports:
+  http_port: 9611 # HTTP 服务端口

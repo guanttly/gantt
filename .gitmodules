@@ -1,0 +1,21 @@
+[submodule "services/management-service"]
+	path = services/management-service
+	url = git@192.168.20.3:dsd-department/pds/solutions-project/smart-rostering/services/management-service.git
+[submodule "pkg"]
+	path = pkg
+	url = git@192.168.20.3:dsd-department/pds/common-component/mcp/go/pkg.git
+[submodule "frontend/web"]
+	path = frontend/web
+	url = git@192.168.20.3:dsd-department/pds/solutions-project/smart-rostering/frontend/web.git
+[submodule "agents/rostering"]
+	path = agents/rostering
+	url = git@192.168.20.3:dsd-department/pds/solutions-project/js-agent/agents/rostering.git
+[submodule "mcp-servers/rostering"]
+	path = mcp-servers/rostering
+	url = git@192.168.20.3:dsd-department/pds/solutions-project/smart-rostering/mcp-servers/rostering.git
+[submodule "sdk/rostering"]
+	path = sdk/rostering
+	url = git@192.168.20.3:dsd-department/pds/solutions-project/js-agent/sdk/rostering-go.git
+[submodule "mcp-servers/context"]
+	path = mcp-servers/context
+	url = git@192.168.20.3:dsd-department/pds/solutions-project/js-agent/server/context.git

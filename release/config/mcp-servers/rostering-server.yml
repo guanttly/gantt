@@ -1,0 +1,27 @@
+# Rostering MCP Server 配置示例
+# 将此文件复制为 config.yml 并根据实际情况修改
+# 服务端口配置
+ports:
+  http_port: 8081  # MCP Server HTTP 服务端口（默认：9611）
+
+# 服务发现配置（使用 Nacos）
+discovery:
+  nacos:
+    groupName: "mcp-server"  # Nacos 服务分组名
+
+# 工具配置
+tools:
+  # 启用的工具列表（空数组表示启用所有工具）
+  enabled_tools: []
+  
+  # 危险操作配置
+  dangerous:
+    enabled: false           # 是否启用危险操作（如删除）
+    require_passcode: true   # 是否需要密码验证
+    passcode: ""             # 危险操作密码
+    allowed_actions: []      # 允许的危险操作列表
+    allowed_tables: []       # 允许操作的表列表
+
+# Management Service 配置（通过 Nacos 服务发现）
+# 服务会自动从 Nacos 发现 management-service 实例
+# 如需直接配置 URL（仅开发环境），请配置 common.yml 的配置

@@ -1,0 +1,511 @@
+/**
+ * 统一样式系统
+ * 整合了所有设计规范、主题变量、组件样式
+ * 作者: 排班管理系统
+ * 更新: 2025-11-06
+ */
+
+/* ==================== 1. CSS 变量定义 ==================== */
+:root {
+  /* 主题颜色 - 可通过环境变量动态切换 */
+  --primary-color: #367AC2;
+  --primary-light: #004ea21a;
+  --primary-deep: #004ea2;
+  
+  --success-color: #67c23a;
+  --warning-color: #e6a23c;
+  --danger-color: #f56c6c;
+  --info-color: #909399;
+
+  /* 文本颜色 */
+  --text-primary: #303133;
+  --text-regular: #606266;
+  --text-secondary: #909399;
+  --text-placeholder: #c0c4cc;
+  --text-white: #ffffff;
+
+  /* 边框颜色 */
+  --border-base: #dcdfe6;
+  --border-light: #e4e7ed;
+  --border-lighter: #ebeef5;
+  --border-extra-light: #f2f6fc;
+
+  /* 背景颜色 */
+  --bg-white: #ffffff;
+  --bg-page: #f5f7fa;
+  --bg-hover: #f5f7fa;
+  --bg-overlay: rgba(0, 0, 0, 0.5);
+
+  /* 间距系统 (4px 基准) */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-base: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-3xl: 48px;
+
+  /* 圆角 */
+  --radius-sm: 4px;
+  --radius-base: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-round: 50%;
+
+  /* 阴影 */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --shadow-base: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
+
+  /* 过渡动画 */
+  --transition-fast: 0.15s;
+  --transition-base: 0.3s;
+  --transition-slow: 0.5s;
+
+  /* 字体 */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 20px;
+  --font-size-3xl: 24px;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Z-index 层级 */
+  --z-base: 1;
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+
+  /* Layout 布局 */
+  --header-height: 60px;
+  --sidebar-width: 200px;
+  --sidebar-collapsed-width: 64px;
+
+  /* 兼容旧变量 (向后兼容) */
+  --mgmt-primary-color: var(--primary-color);
+  --mgmt-spacing-xl: var(--spacing-xl);
+  --mgmt-spacing-2xl: var(--spacing-2xl);
+  --mgmt-spacing-3xl: var(--spacing-3xl);
+  --mgmt-bg-page: var(--bg-page);
+  --mgmt-bg-color: var(--bg-white);
+  --mgmt-text-primary: var(--text-primary);
+  --mgmt-text-regular: var(--text-regular);
+  --mgmt-text-secondary: var(--text-secondary);
+  --mgmt-border-base: var(--border-base);
+  --mgmt-border-light: var(--border-light);
+  --mgmt-radius-base: var(--radius-base);
+  --mgmt-shadow-sm: var(--shadow-sm);
+  --mgmt-shadow-base: var(--shadow-base);
+}
+
+/* ==================== 2. 主题切换 (绿色主题) ==================== */
+[data-theme="green"] {
+  --primary-color: #048392;
+  --primary-light: #0483921a;
+  --primary-deep: #048192;
+}
+
+/* ==================== 3. 全局基础样式 ==================== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+
+  &:hover {
+    color: var(--primary-deep);
+  }
+}
+
+/* ==================== 4. Element Plus 组件样式覆盖 ==================== */
+
+/* 按钮 */
+.el-button {
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-fast);
+
+  &.el-button--primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+
+    &:hover,
+    &:focus {
+      background-color: var(--primary-deep);
+      border-color: var(--primary-deep);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+}
+
+/* 输入框 */
+.el-input__wrapper {
+  transition: all var(--transition-fast);
+  box-shadow: 0 0 0 1px var(--border-base) inset;
+
+  &:hover {
+    box-shadow: 0 0 0 1px var(--border-light) inset;
+  }
+
+  &.is-focus {
+    box-shadow: 0 0 0 1px var(--primary-color) inset;
+  }
+}
+
+/* 选择器 */
+.el-select .el-input__wrapper {
+  transition: all var(--transition-fast);
+}
+
+/* 表格 */
+.el-table {
+  --el-table-border-color: var(--border-lighter);
+  --el-table-header-bg-color: #E9ECEF;
+  --el-table-header-text-color: #111111;
+
+  .el-table__header-wrapper .el-table__header thead th {
+    font-weight: var(--font-weight-semibold);
+    background-color: #E9ECEF;
+  }
+
+  .el-table__body-wrapper .el-table__row {
+    transition: background-color var(--transition-fast);
+
+    &:hover {
+      background-color: var(--bg-hover);
+    }
+  }
+}
+
+/* 分页 */
+.el-pagination {
+  --el-pagination-button-disabled-bg-color: var(--bg-page);
+
+  .el-pager li {
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+
+    &:hover:not(.is-active) {
+      color: var(--primary-color);
+      background: var(--primary-light);
+    }
+
+    &.is-active {
+      background: var(--primary-color);
+      color: white;
+    }
+  }
+}
+
+/* 卡片 */
+.el-card {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-base);
+
+  &:hover {
+    box-shadow: var(--shadow-base);
+  }
+}
+
+/* 对话框 */
+.el-dialog {
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  // 优化对话框定位：使用 transform 居中，避免固定 margin-top 导致偏下
+  --el-dialog-margin-top: 0;
+  margin-top: 0 !important;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-bottom: 0;
+}
+
+/* 消息提示 */
+.el-message {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+/* 菜单 */
+.el-menu {
+  --el-menu-base-level-padding: 8px;
+}
+
+/* ==================== 5. 布局样式 ==================== */
+
+/* Logo 区域 */
+.system-logo {
+  color: #f1f1f1;
+  background: #263445;
+}
+
+/* 菜单区域 */
+.system-menu {
+  color: #bfcbd9;
+  background: #181f31;
+
+  &-children {
+    background: #1f2d3d;
+  }
+
+  &-submenu-active {
+    color: #fff;
+  }
+
+  &-hover {
+    background: #203448;
+  }
+}
+
+/* Header 区域 */
+.system-header {
+  background: #fff;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
+
+  &-breadcrumb {
+    color: var(--text-regular);
+  }
+
+  &-item:hover {
+    background: rgba(0, 0, 0, 0.06);
+  }
+}
+
+/* Container 区域 */
+.system-container {
+  background: var(--bg-page);
+
+  &-main {
+    background: var(--bg-white);
+  }
+}
+
+/* ==================== 6. 页面专用样式 ==================== */
+
+/* 排班页面 */
+.scheduling-page {
+  /* 甘特图样式 */
+  .vis-timeline {
+    border: none;
+    font-family: inherit;
+  }
+
+  .vis-item {
+    border-radius: var(--radius-sm);
+    border-width: 2px;
+    transition: all var(--transition-fast);
+
+    &.vis-selected {
+      box-shadow: var(--shadow-base);
+    }
+
+    &.conflict {
+      border-color: var(--danger-color) !important;
+      background-color: rgba(245, 108, 108, 0.1) !important;
+    }
+
+    &.warning {
+      border-color: var(--warning-color) !important;
+      background-color: rgba(230, 162, 60, 0.1) !important;
+    }
+  }
+
+  /* ECharts 图表 */
+  .graph-view .echarts {
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
+/* 管理页面通用样式 */
+.management-page {
+  padding: var(--spacing-xl);
+  background-color: var(--bg-page);
+  min-height: 100vh;
+
+  .search-card,
+  .toolbar-card,
+  .table-card {
+    margin-bottom: var(--spacing-base);
+  }
+
+  .search-form {
+    .el-form-item {
+      margin-bottom: var(--spacing-base);
+    }
+  }
+
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .table-actions {
+    .el-button {
+      margin-left: var(--spacing-sm);
+    }
+  }
+}
+
+/* ==================== 7. 工具类 ==================== */
+
+/* 文本 */
+.text-primary { color: var(--text-primary) !important; }
+.text-regular { color: var(--text-regular) !important; }
+.text-secondary { color: var(--text-secondary) !important; }
+.text-white { color: var(--text-white) !important; }
+
+/* 背景 */
+.bg-white { background-color: var(--bg-white) !important; }
+.bg-page { background-color: var(--bg-page) !important; }
+
+/* 间距 */
+.m-0 { margin: 0 !important; }
+.mt-1 { margin-top: var(--spacing-xs) !important; }
+.mt-2 { margin-top: var(--spacing-sm) !important; }
+.mt-3 { margin-top: var(--spacing-md) !important; }
+.mt-4 { margin-top: var(--spacing-base) !important; }
+.mb-1 { margin-bottom: var(--spacing-xs) !important; }
+.mb-2 { margin-bottom: var(--spacing-sm) !important; }
+.mb-3 { margin-bottom: var(--spacing-md) !important; }
+.mb-4 { margin-bottom: var(--spacing-base) !important; }
+
+.p-0 { padding: 0 !important; }
+.p-1 { padding: var(--spacing-xs) !important; }
+.p-2 { padding: var(--spacing-sm) !important; }
+.p-3 { padding: var(--spacing-md) !important; }
+.p-4 { padding: var(--spacing-base) !important; }
+
+/* 圆角 */
+.rounded { border-radius: var(--radius-base) !important; }
+.rounded-lg { border-radius: var(--radius-lg) !important; }
+
+/* 阴影 */
+.shadow-sm { box-shadow: var(--shadow-sm) !important; }
+.shadow-base { box-shadow: var(--shadow-base) !important; }
+.shadow-md { box-shadow: var(--shadow-md) !important; }
+
+/* Flex 布局 */
+.flex { display: flex !important; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.flex-column { flex-direction: column !important; }
+
+/* ==================== 8. 自定义滚动条 ==================== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #dcdfe6;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+
+  &:hover {
+    background: #c0c4cc;
+  }
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ==================== 9. 响应式设计 ==================== */
+@media (max-width: 768px) {
+  :root {
+    --spacing-xl: 16px;
+    --spacing-2xl: 24px;
+    --font-size-base: 13px;
+  }
+
+  .scheduling-page .scheduling-container {
+    flex-direction: column;
+
+    .left-pane {
+      border-right: none;
+      border-bottom: 1px solid var(--border-base);
+    }
+
+    .right-pane {
+      width: 100% !important;
+    }
+  }
+
+  .management-page {
+    padding: var(--spacing-md);
+  }
+}
+
+/* ==================== 10. 进度条 (NProgress) ==================== */
+#nprogress {
+  pointer-events: none;
+
+  .bar {
+    background: var(--primary-color);
+    position: fixed;
+    z-index: var(--z-tooltip);
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+  }
+
+  .peg {
+    box-shadow: 0 0 10px var(--primary-color), 0 0 5px var(--primary-color);
+  }
+
+  .spinner-icon {
+    border-top-color: var(--primary-color);
+    border-left-color: var(--primary-color);
+  }
+}
+
+/* ==================== 11. 打印样式 ==================== */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+  }
+}

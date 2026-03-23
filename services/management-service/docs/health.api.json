@@ -1,0 +1,98 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "健康检查 API",
+    "version": "1.0.0",
+    "description": "服务健康状态检查接口"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "本地开发环境"
+    }
+  ],
+  "tags": [
+    {
+      "name": "健康检查",
+      "description": "服务健康状态监控"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "健康检查",
+        "description": "检查服务是否正常运行",
+        "tags": ["健康检查"],
+        "responses": {
+          "200": {
+            "description": "服务运行正常",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0,
+                      "description": "状态码"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success",
+                      "description": "响应消息"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "example": "healthy",
+                          "description": "健康状态"
+                        },
+                        "service": {
+                          "type": "string",
+                          "example": "management-service",
+                          "description": "服务名称"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "状态码"
+          },
+          "message": {
+            "type": "string",
+            "description": "响应消息"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "description": "健康状态"
+              },
+              "service": {
+                "type": "string",
+                "description": "服务名称"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

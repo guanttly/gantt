@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  gantt-app:
+    image: gantt-app:latest
+    container_name: gantt-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"       # Nginx - 前端和反向代理
+      - "8080:8080"   # Management Service
+      - "8081:8081"   # Rostering MCP Server
+      - "8083:8083"   # Context MCP Server
+      - "8082:8082"   # Rostering Agent
+    volumes:
+      # 可选：挂载配置文件以便动态修改
+      - ./config:/app/config:ro
+      # 可选：挂载日志目录
+      - ./logs:/var/log:rw
+    environment:
+      # 可选：设置时区
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - gantt-network
+
+  # 可选：添加 MySQL 数据库服务
+  # mysql:
+  #   image: mysql:8.0
+  #   container_name: gantt-mysql
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: rootpassword
+  #     MYSQL_DATABASE: gantt
+  #     MYSQL_USER: gantt
+  #     MYSQL_PASSWORD: ganttpassword
+  #   ports:
+  #     - "3306:3306"
+  #   volumes:
+  #     - mysql-data:/var/lib/mysql
+  #   restart: unless-stopped
+  #   networks:
+  #     - gantt-network
+
+  # 可选：添加 Redis 缓存服务
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: gantt-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis-data:/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - gantt-network
+
+networks:
+  gantt-network:
+    driver: bridge
+
+# volumes:
+#   mysql-data:
+#   redis-data:

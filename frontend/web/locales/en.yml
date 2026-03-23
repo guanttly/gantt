@@ -1,0 +1,120 @@
+button:
+  toggle_langs: Change languages
+  open_dialog: Open Dialog
+form:
+  age_required: Please input the age
+  age_must_be_integer: Please input digits
+  age_must_be_over_18: Age must be greater than 18
+  password_required: Please input the password
+  password_again_required: Please input the password again
+  password_must_be_same: Two inputs don\'t match!
+pages:
+  permission:
+    data:
+      search: Query data permissions
+      name: Data permission name
+      description: Data permission description
+      id: serial number
+      modify: Modify data permissions
+    interface:
+      confirm:
+        delete: Are you sure to delete the selected interface permission?
+      id: serial number
+      name: Interface permission name
+      description: Interface permission description
+      noData: No interface permissions were found
+      import: Import the backend interface
+      noInterfaceData: No background permissions were found
+      backend:
+        name: Interface name
+        description: Interface description
+        status: Interface status
+      modify: Edit interface permissions
+      add: Add interface permissions
+    menu:
+      name: Menu permission name
+      route: Menu permission routing
+      description: Menu permission description
+      modify: Modify menu permissions
+    operation:
+      confirm:
+        delete: Is it certain to delete the selected operation permissions
+      search: Query operation permissions
+      name: Permission name
+      description: Operation permission description
+      noData: No operation permissions were found
+      noInterface: The associated interface has not been configured yet
+      assignment: Assign interface permissions
+      modify: Modify operation permissions
+      add: Add operation permissions
+    rule:
+      require:
+        name: Permission name is not allowed to be empty
+        description: Permission description is not allowed to be empty
+        key: Keywords are not allowed to be empty
+        route: Menu routing is not allowed to be empty
+  common:
+    search: search
+    placeholder:
+      search: Please enter query conditions
+    operation: operate
+    warn: warn
+    add: Add to
+    remove: Remove
+    modify: Revise
+    delete: delete
+    rule:
+      length:
+        '2_10': Character lengths are between 2-10
+        '2_100': Character length is between 2-100
+    submit: submit
+    cancel: Cancel
+    unassign: Cancel the allocation
+    assignment: distribute
+    importAll: Import all
+    imported: Imported
+    notImported: Not imported
+    import: Import
+  role:
+    confirm:
+      delete: Whether to confirm the delete of the selected role
+    search: Query role
+    name: Role name
+    description: Role description
+message:
+  common:
+    confirm: confirm
+    cancel: Cancel
+    del: delete
+    please_input: Please enter
+  system:
+    tab:
+      reload: Reload
+      closeCurrent: Close the current tag
+      closeOther: Close other tags
+      closeAll: Close all tags
+    fullScreenBack: Exit full screen
+    fullScreen: full screen
+    changePassword: Modify password
+    loginOut: Sign out
+  login:
+    verify_confirm_pwd: >-
+      The new password is inconsistent when inputting it twice. Please check and
+      re-enter it.
+    old_pwd: Old Password
+    new_pwd: New Password
+    confirm_new_pwd: Confirm the new password
+router:
+  main:
+    permission: Permission Management
+    data: Data permission management
+    interface: Interface permission management
+    menu: Menu permission management
+    operation: Operation permission management
+    role: Role Management
+    login: Log in
+    root: Dashboard
+    account: Account Management
+    doc: Files
+  doc:
+    detail: Detail

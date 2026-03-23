@@ -1,0 +1,885 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "排班规则管理 API",
+    "version": "1.0.0",
+    "description": "排班规则定义和规则关联管理相关接口"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "本地开发环境"
+    }
+  ],
+  "tags": [
+    {
+      "name": "排班规则",
+      "description": "排班规则的增删改查操作"
+    },
+    {
+      "name": "规则关联",
+      "description": "规则与员工、班次的关联管理"
+    },
+    {
+      "name": "规则查询",
+      "description": "根据员工或班次查询相关规则"
+    }
+  ],
+  "paths": {
+    "/api/v1/scheduling-rules": {
+      "get": {
+        "summary": "查询规则列表",
+        "description": "根据条件查询排班规则列表，支持分页",
+        "tags": ["排班规则"],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": true,
+            "description": "组织ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ruleType",
+            "in": "query",
+            "required": false,
+            "description": "规则类型（max_shifts/consecutive_shifts/rest_days/forbidden_pattern/preferred_pattern）",
+            "schema": {
+              "type": "string",
+              "enum": ["max_shifts", "consecutive_shifts", "rest_days", "forbidden_pattern", "preferred_pattern"]
+            }
+          },
+          {
+            "name": "applyScope",
+            "in": "query",
+            "required": false,
+            "description": "应用范围（global/group/employee/shift）",
+            "schema": {
+              "type": "string",
+              "enum": ["global", "group", "employee", "shift"]
+            }
+          },
+          {
+            "name": "timeScope",
+            "in": "query",
+            "required": false,
+            "description": "时间范围（daily/weekly/monthly/custom）",
+            "schema": {
+              "type": "string",
+              "enum": ["daily", "weekly", "monthly", "custom"]
+            }
+          },
+          {
+            "name": "isActive",
+            "in": "query",
+            "required": false,
+            "description": "是否启用",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "description": "搜索关键词",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "页码，从1开始",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "description": "每页数量",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "创建排班规则",
+        "description": "创建新的排班规则",
+        "tags": ["排班规则"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRuleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scheduling-rules/{id}": {
+      "get": {
+        "summary": "获取规则详情",
+        "description": "根据ID获取排班规则详细信息",
+        "tags": ["排班规则"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "规则ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": true,
+            "description": "组织ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "更新规则信息",
+        "description": "更新指定排班规则的信息",
+        "tags": ["排班规则"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "规则ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": true,
+            "description": "组织ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRuleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "删除规则",
+        "description": "删除指定排班规则",
+        "tags": ["排班规则"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "规则ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": true,
+            "description": "组织ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "删除成功，无返回内容"
+          }
+        }
+      }
+    },
+    "/api/v1/scheduling-rules/{id}/associations": {
+      "post": {
+        "summary": "添加规则关联",
+        "description": "为规则添加关联对象（员工、分组、班次等）",
+        "tags": ["规则关联"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "规则ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": true,
+            "description": "组织ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddAssociationsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "添加成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                          "example": "Associations added successfully"
+                        },
+                        "count": {
+                          "type": "integer",
+                          "description": "添加的关联数量"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "删除规则关联",
+        "description": "删除规则的关联对象",
+        "tags": ["规则关联"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "规则ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": true,
+            "description": "组织ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveAssociationsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string",
+                          "example": "Associations removed successfully"
+                        },
+                        "count": {
+                          "type": "integer",
+                          "description": "删除的关联数量"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employeeId}/scheduling-rules": {
+      "get": {
+        "summary": "查询员工相关规则",
+        "description": "获取适用于指定员工的所有排班规则",
+        "tags": ["规则查询"],
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "description": "员工ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": true,
+            "description": "组织ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SchedulingRule"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shifts/{shiftId}/scheduling-rules": {
+      "get": {
+        "summary": "查询班次相关规则",
+        "description": "获取适用于指定班次的所有排班规则",
+        "tags": ["规则查询"],
+        "parameters": [
+          {
+            "name": "shiftId",
+            "in": "path",
+            "required": true,
+            "description": "班次ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": true,
+            "description": "组织ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "integer",
+                      "example": 0
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SchedulingRule"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SchedulingRule": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "规则唯一标识"
+          },
+          "orgId": {
+            "type": "string",
+            "description": "组织ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "规则名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "规则描述"
+          },
+          "ruleType": {
+            "type": "string",
+            "enum": ["max_shifts", "consecutive_shifts", "rest_days", "forbidden_pattern", "preferred_pattern"],
+            "description": "规则类型"
+          },
+          "applyScope": {
+            "type": "string",
+            "enum": ["global", "group", "employee", "shift"],
+            "description": "应用范围"
+          },
+          "timeScope": {
+            "type": "string",
+            "enum": ["daily", "weekly", "monthly", "custom"],
+            "description": "时间范围"
+          },
+          "ruleData": {
+            "type": "string",
+            "description": "规则数据（JSON格式）"
+          },
+          "maxCount": {
+            "type": "integer",
+            "nullable": true,
+            "description": "最大班次数"
+          },
+          "consecutiveMax": {
+            "type": "integer",
+            "nullable": true,
+            "description": "连续最大班次数"
+          },
+          "intervalDays": {
+            "type": "integer",
+            "nullable": true,
+            "description": "间隔天数"
+          },
+          "minRestDays": {
+            "type": "integer",
+            "nullable": true,
+            "description": "最少休息天数"
+          },
+          "priority": {
+            "type": "integer",
+            "description": "优先级"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "是否启用"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "生效开始日期"
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "生效结束日期"
+          },
+          "associations": {
+            "type": "array",
+            "description": "关联对象列表",
+            "items": {
+              "$ref": "#/components/schemas/RuleAssociation"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "创建时间"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "更新时间"
+          }
+        }
+      },
+      "RuleAssociation": {
+        "type": "object",
+        "properties": {
+          "associationType": {
+            "type": "string",
+            "enum": ["employee", "group", "shift"],
+            "description": "关联类型"
+          },
+          "associationId": {
+            "type": "string",
+            "description": "关联对象ID"
+          }
+        }
+      },
+      "CreateRuleRequest": {
+        "type": "object",
+        "required": ["orgId", "name", "ruleType", "applyScope", "timeScope"],
+        "properties": {
+          "orgId": {
+            "type": "string",
+            "description": "组织ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "规则名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "规则描述"
+          },
+          "ruleType": {
+            "type": "string",
+            "enum": ["max_shifts", "consecutive_shifts", "rest_days", "forbidden_pattern", "preferred_pattern"],
+            "description": "规则类型"
+          },
+          "applyScope": {
+            "type": "string",
+            "enum": ["global", "group", "employee", "shift"],
+            "description": "应用范围"
+          },
+          "timeScope": {
+            "type": "string",
+            "enum": ["daily", "weekly", "monthly", "custom"],
+            "description": "时间范围"
+          },
+          "ruleData": {
+            "type": "string",
+            "description": "规则数据（JSON格式）"
+          },
+          "maxCount": {
+            "type": "integer",
+            "nullable": true,
+            "description": "最大班次数"
+          },
+          "consecutiveMax": {
+            "type": "integer",
+            "nullable": true,
+            "description": "连续最大班次数"
+          },
+          "intervalDays": {
+            "type": "integer",
+            "nullable": true,
+            "description": "间隔天数"
+          },
+          "minRestDays": {
+            "type": "integer",
+            "nullable": true,
+            "description": "最少休息天数"
+          },
+          "priority": {
+            "type": "integer",
+            "description": "优先级"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "是否启用"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "生效开始日期"
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "生效结束日期"
+          },
+          "associations": {
+            "type": "array",
+            "description": "关联对象列表",
+            "items": {
+              "$ref": "#/components/schemas/RuleAssociation"
+            }
+          }
+        }
+      },
+      "UpdateRuleRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "规则名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "规则描述"
+          },
+          "ruleType": {
+            "type": "string",
+            "enum": ["max_shifts", "consecutive_shifts", "rest_days", "forbidden_pattern", "preferred_pattern"],
+            "description": "规则类型"
+          },
+          "timeScope": {
+            "type": "string",
+            "enum": ["daily", "weekly", "monthly", "custom"],
+            "description": "时间范围"
+          },
+          "ruleData": {
+            "type": "string",
+            "description": "规则数据（JSON格式）"
+          },
+          "maxCount": {
+            "type": "integer",
+            "nullable": true,
+            "description": "最大班次数"
+          },
+          "consecutiveMax": {
+            "type": "integer",
+            "nullable": true,
+            "description": "连续最大班次数"
+          },
+          "intervalDays": {
+            "type": "integer",
+            "nullable": true,
+            "description": "间隔天数"
+          },
+          "minRestDays": {
+            "type": "integer",
+            "nullable": true,
+            "description": "最少休息天数"
+          },
+          "priority": {
+            "type": "integer",
+            "description": "优先级"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "是否启用"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "生效开始日期"
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "生效结束日期"
+          }
+        }
+      },
+      "AddAssociationsRequest": {
+        "type": "object",
+        "required": ["associations"],
+        "properties": {
+          "associations": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/RuleAssociation"
+            }
+          }
+        }
+      },
+      "RemoveAssociationsRequest": {
+        "type": "object",
+        "required": ["associationIds"],
+        "properties": {
+          "associationIds": {
+            "type": "array",
+            "minItems": 1,
+            "description": "要删除的关联ID列表",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RuleListResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "description": "总记录数"
+              },
+              "page": {
+                "type": "integer",
+                "description": "当前页码"
+              },
+              "size": {
+                "type": "integer",
+                "description": "每页数量"
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SchedulingRule"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "example": 0
+          },
+          "message": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SchedulingRule"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "description": "错误码"
+          },
+          "message": {
+            "type": "string",
+            "description": "错误信息"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true
+          }
+        }
+      }
+    }
+  }
+}

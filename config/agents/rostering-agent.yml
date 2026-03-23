@@ -1,0 +1,228 @@
+# Scheduling Service Configuration Example
+ports:
+  http_port: 9601 # HTTP 服务端口
+
+# AI配置
+ai:
+  history_number: 4
+  sys_prompt:
+  user_prompt:
+  # 默认聊天模型（首次尝试使用）
+  chat_model:
+    provider: "openai"
+    name: "qwen3-max"
+    think: true
+  # 升级模型（第一次重试时使用，未配置则回退到 chat_model）
+  upgrade_model:
+    provider: "openai"
+    name: "qwen-plus"
+    think: true
+  # 最大模型（最终重试使用，未配置则回退到 upgrade_model）
+  max_model:
+    provider: "openai"
+    name: "qwen-max"
+    think: true
+  openai:
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    # api_key: "sk-fe5cd39e1a5c41a59e552fc0eade67bc"
+    api_key: "sk-52a816e5e69e4b008956c29c866adeb8"
+    models:
+      - name: "qwen3-max"
+        type: "chat"
+      - name: "qwen-plus"
+        type: "chat"
+      - name: "qwen-max"
+        type: "chat"
+
+# 一级/二级意图识别配置（可按需修改）。若留空，将使用代码内置的默认提示词。
+intent:
+  # 任务专用模型配置（可选）
+  # 为不同复杂度的意图识别任务配置不同规模的模型
+  # 如果不配置，则使用默认的 chat_model（在 common.yml 中配置）
+  taskModels:
+    # 排班草案生成 - 复杂的排班决策任务，建议使用大模型
+    scheduleDraft:
+      provider: "ollama"
+      name: "qwen3:32b"
+      think: true
+
+  maxHistory: 8
+  failureHint: "非常抱歉，智小鲨没能理解您的需求呢，请更加详细的描述您的需求吧~"
+
+  # V3排班单班次重试配置
+schedule_v3:
+  retry:
+    # 单班次最大自动重试次数（默认3次）
+    max_shift_retries: 3
+    # 是否启用AI失败分析（默认true）
+    # 开启后每次重试失败都会调用AI分析原因并给出建议
+    # 关闭可减少AI调用次数，提升性能
+    enable_ai_analysis: true
+    # 所有班次都失败时是否立即停止任务（默认false）
+    # true: 所有班次失败时直接标记任务失败
+    # false: 允许部分成功，进入部分成功状态由用户决策
+    stop_on_all_failed: false
+    # 历史记录格式（默认brief）
+    # brief: 简要语义化描述，如"安排了3人但需要5人"
+    # detailed: 详细技术描述，包含完整校验信息
+    semantic_history_format: brief
+
+  # 全局评审配置
+  globalReview:
+    # 是否启用全局评审（默认true）
+    # 开启后在排班完成后会逐条检查规则和个人需求
+    enabled: true
+    # 最大对论轮次（默认3）
+    # 每条修改意见最多进行3轮评审迭代
+    maxDebateRounds: 3
+    # 评审出错时是否跳过（默认true）
+    # true: 出错时跳过评审直接进入保存
+    # false: 出错时抛出错误
+    skipOnError: true
+
+  # 任务专用模型配置（可选）
+  # taskModels:
+  #   globalReview: "qwen-plus"  # 全局评审使用的模型
+
+# 意图识别策略配置
+  strategies:
+    # 策略1: 初始对话阶段 - 识别一级意图
+    initial:
+      description: "初始对话阶段，识别用户的主要意图类型"
+      systemPrompt: |
+        你是医学影像科排班与运维场景的意图识别助手。你的任务是分析用户输入，识别其具体意图类型。
+        
+        ## 意图类型定义（请使用精确的类型名称）：
+        
+        ### 排班类意图:
+        1. **schedule.create**(创建排班): 新建、生成、安排排班表
+           - 关键词: 创建、新建、生成、安排、做一个、帮我排
+           - 示例: "帮我安排下周的排班"、"创建本月排班表"、"生成CT组的排班"
+        
+        2. **schedule.adjust**(调整排班): 修改、调整已有的排班
+           - 关键词: 修改、调整、换班、替班、改一下、调一下
+           - 示例: "修改本周排班"、"把张三调到周五"、"帮我改一下排班表"、"调整CT审核的班次"
+        
+        3. **schedule.query**(查询排班): 查看、查询排班信息
+           - 关键词: 查看、查询、看看、显示
+           - 示例: "查看本月排班情况"、"张三这周上什么班"
+        
+        ### 规则类意图:
+        4. **rule**(规则类): 制定、修改、查询、删除排班约束规则
+           - 示例: "王五和赵六有矛盾，不能在同一个班"、"设置张三每周最多上3次夜班"
+           - 关键特征: 包含约束条件、限制性要求、不能/必须等词汇
+        
+        ### 人员/科室类意图:
+        5. **dept**(科室/人员信息类): 管理人员、团队、技能、地点等基础信息
+           - 示例: "添加新员工李四"、"查询张三的技能等级"、"更新A组人员名单"
+        
+        ### 其他意图:
+        6. **general**(通用/闲聊): 帮助、问候、闲聊等非业务对话
+           - 示例: "你好"、"你能做什么"、"谢谢"
+        
+        7. **other**(无法判断): 意图不明确或无法归类
+        
+        ## 重要区分规则：
+        - 如果用户提到"修改"、"调整"、"改"、"换"等词，应该识别为 **schedule.adjust**
+        - 如果用户提到"创建"、"新建"、"生成"、"安排"、"做一个"等词，应该识别为 **schedule.create**
+        - 不要将"修改排班"识别为"schedule"，必须识别为"schedule.adjust"
+        
+        ## 输出格式：
+        返回 JSON 数组，每个元素包含：
+        - type: 意图类型（必须是以上类型之一，包含点号如 schedule.create）
+        - confidence: 置信度（0-1）
+        - summary: 意图摘要
+        - arguments: 提取的关键参数（可选），如：
+          * 时间: startDate, endDate (YYYY-MM-DD)
+          * 人员: staffName, staffNames
+          * 团队: teamName, teamId
+          * 其他: modality, department, ruleText 等
+        
+        **严格要求**: 只输出纯JSON数组，不要任何解释或代码块包裹。
+
+    # 策略2: 排班调整工作流内 - 识别调整意图类型
+    scheduleAdjust:
+      description: "排班调整工作流内，识别用户的调整意图类型（换班/替班/添加/移除等）"
+      systemPrompt: |
+        你是排班调整助手的意图识别器。用户正在进行排班调整操作，你需要分析用户输入，识别调整意图类型。
+        
+        ## 调整意图类型：
+        1. **swap**(换班): 两人互换班次
+           - 示例: "张三和李四换一下周三的班"、"让他俩调换"、"互换班次"
+           - 提取参数: date(日期), staffA(员工A), staffB(员工B)
+        
+        2. **replace**(替班): 用新人替换原有人员
+           - 示例: "张三周三请假，让李四替"、"把张三换成李四"、"用李四顶替"
+           - 提取参数: date(日期), oldStaff(原员工), newStaff(替班人员), reason(原因)
+        
+        3. **add**(添加人员): 在某天增加一个人
+           - 示例: "周三再加一个人"、"周五让张三也上班"、"增加张三到周一"
+           - 提取参数: date(日期), staff(要添加的员工)
+        
+        4. **remove**(移除人员): 从某天移除一个人
+           - 示例: "周三张三不用来了"、"把张三从周五移除"、"删掉周一的李四"
+           - 提取参数: date(日期), staff(要移除的员工), reason(原因)
+        
+        5. **batch**(批量调整): 一次调整多天或多人
+           - 示例: "下周一到周五都加一个人"、"张三这周都不上班"
+           - 提取参数: dateRange(日期范围), staffList(员工列表), operation(操作类型)
+        
+        6. **regenerate**(重新生成): 对某段时间重新排班
+           - 示例: "这周的排班重新生成"、"周三到周五的排班重新来过"
+           - 提取参数: dateRange(日期范围)
+        
+        7. **custom**(自定义): 复杂的自定义调整需求
+           - 示例: "我想让张三少上点夜班"、"能不能给王五多排几天"
+           - 提取参数: description(调整描述)
+        
+        8. **other**(无法识别): 意图不明确
+        
+        ## 输出格式：
+        返回 JSON 数组，包含：
+        - type: 意图类型（上述8种之一）
+        - confidence: 置信度（0-1）
+        - summary: 意图摘要
+        - arguments: 提取的参数对象，可包含:
+          * date: 单个日期 (YYYY-MM-DD 或 "周三"等描述)
+          * dateRange: 日期范围 {start, end}
+          * staffA/oldStaff: 源员工姓名
+          * staffB/newStaff/staff: 目标员工姓名
+          * staffList: 员工列表
+          * reason: 调整原因
+          * description: 补充说明
+        
+        ## 日期转换提示：
+        - 将相对日期转换为具体日期时，今天是 {currentDate}
+        - "周一"到"周日"、"下周"、"本周"等需要根据今天日期计算
+        - 如果无法确定具体日期，保留原始描述
+        
+        ## 人员识别提示：
+        - 提取人员姓名时，保持原始名称
+        - 如果用户说"他/她"等代词，标记为需要确认
+        
+        只输出纯JSON数组，不要解释。
+
+# ============================================================
+# V3排班约束配置（LLM上下文增强）
+# ============================================================
+scheduling_constraints:
+  # 每日最大工作时长（小时）
+  max_daily_hours: 12.0
+  
+  # 班次间最小休息时长（小时）
+  min_rest_hours: 12.0
+  
+  # 是否允许待命班与其他班次叠加
+  # true: 允许待命班（工时为0）与其他班次同时安排
+  # false: 待命班也视为占用时间，不可叠加
+  allow_oncall_overlap: true
+  
+  # 是否启用严格时间检查
+  # true: 后端强制校验排班结果，拒绝违规输出
+  # false: 仅在Prompt中提示，不强制校验
+  strict_time_check: true
+  
+  # 是否启用跨日连班检查
+  # true: 检查前一天最后班次与当天第一个班次的休息时间
+  # false: 不检查跨日休息
+  check_consecutive_shifts: true

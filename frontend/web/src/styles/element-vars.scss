@@ -1,0 +1,30 @@
+/**
+ * Element Plus 主题变量覆盖
+ * 用于自定义 Element Plus 组件的默认样式
+ */
+
+// 主色调配置
+$colors: (
+  'primary': (
+    'base': #367AC2,
+  ),
+) !default;
+
+// 表格配置
+$table: (
+  'header-bg-color': #E9ECEF,
+  'header-text-color': #111111,
+  'border-color': #ebeef5,
+) !default;
+
+// 菜单配置
+$menu: (
+  'base-level-padding': 8px,
+) !default;
+
+// 导出 Element Plus 变量
+@forward 'element-plus/theme-chalk/src/common/var.scss' with (
+  $colors: $colors,
+  $table: $table,
+  $menu: $menu,
+);

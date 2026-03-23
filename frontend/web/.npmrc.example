@@ -1,0 +1,11 @@
+# NPM 镜像配置文件
+# 将此文件复制到 frontend/web/.npmrc 可加速本地开发时的依赖安装
+
+# 使用淘宝 NPM 镜像
+registry=https://registry.npmmirror.com
+
+# 或者使用腾讯云镜像（备选）
+# registry=https://mirrors.cloud.tencent.com/npm/
+
+# pnpm 配置
+shamefully-hoist=true

@@ -1,0 +1,12 @@
+# 数据库配置
+database:
+  mysql:
+    dbname: "jusha-software-gantt-rostering-dev" # 数据库名称
+
+# 服务端口
+ports:
+  http_port: 9605 # HTTP 服务端口
+
+# 排班人数计算配置
+staffing:
+  default_avg_report_limit: 50 # 默认人均报告处理上限（当班次未配置时使用）

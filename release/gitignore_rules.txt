@@ -1,0 +1,15 @@
+# ======================================
+# Docker 构建相关 - 建议添加到 .gitignore
+# ======================================
+
+# Docker 构建产物
+release/bin/*.tar
+release/bin/*.tar.gz
+release/bin/DEPLOY_*.md
+
+# Docker 临时文件
+release/tmp/*
+
+# 保留目录结构（不要忽略这些文件）
+!release/bin/.gitkeep
+!release/tmp/.gitkeep

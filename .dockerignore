@@ -1,0 +1,78 @@
+# Git 相关
+.git
+.gitignore
+.gitattributes
+
+# IDE 相关
+.vscode
+.idea
+.cursor
+*.swp
+*.swo
+*~
+
+# 文档
+*.md
+!README.md
+docs/
+
+# 测试文件
+*_test.go
+test/
+tests/
+**/*_test.go
+
+# 构建产物
+bin/
+release/bin/
+release/tmp/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 依赖缓存（构建时会重新下载）
+vendor/
+node_modules/
+
+# 前端构建产物
+frontend/web/dist/
+frontend/web/node_modules/
+frontend/web/.vite/
+
+# 日志
+*.log
+logs/
+*.out
+
+# 临时文件
+tmp/
+temp/
+.tmp/
+*.tmp
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 环境变量文件（排除敏感的本地环境变量，但保留前端构建需要的配置）
+.env.local
+.env.*.local
+
+# 编辑器备份
+*~
+*.bak
+*.backup
+
+# 覆盖率报告
+coverage/
+*.cover
+*.coverage
+
+# 其他
+*.tar
+*.tar.gz
+*.zip
+.dockerignore
+docker-compose.yml

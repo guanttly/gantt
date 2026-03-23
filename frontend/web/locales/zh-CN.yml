@@ -1,0 +1,157 @@
+button:
+  open_dialog: 打开窗口
+  toggle_langs: 切换语言
+form:
+  '404': 404
+  age_must_be_integer: 请输入数字
+  age_must_be_over_18: 年龄必须超过18岁
+  age_required: 请输入年龄
+  default: 默认
+  password_again_required: 需要再次输入密码
+  password_must_be_same: 两次输入不同！。
+  password_required: 需要输入密码
+message:
+  common:
+    cancel: 取消
+    confirm: 确认
+    del: 删除
+    please_input: 请输入
+  login:
+    confirm_new_pwd: 确认新密码
+    new_pwd: 新密码
+    old_pwd: 旧密码
+    verify_confirm_pwd: 新密码两次输入不一致，请检查后重新输入
+  menu:
+    navigation:
+      account: 账户管理
+  system:
+    changePassword: 修改密码
+    fullScreen: 全屏
+    fullScreenBack: 退出全屏
+    loginOut: 登出
+    tab:
+      closeAll: 关闭所有标签
+      closeCurrent: 关闭当前标签
+      closeOther: 关闭其他标签
+      reload: 重新加载
+    title: 巨鲨AI智能排班系统
+pages:
+  common:
+    add: 添加
+    assign: 分配权限
+    assignment: 分配
+    cancel: 取消
+    confirm: 确定
+    delete: 删除
+    edit: 编辑
+    export: 导出
+    import: 导入
+    importAll: 导入所有
+    imported: 已导入
+    modify: 修改
+    next: 下一页
+    notImported: 未导入
+    operation: 操作
+    placeholder:
+      search: 请输入查询条件
+    popperClass: 页
+    prev: 上一页
+    remove: 移除
+    reset: 重置
+    rule:
+      length:
+        '2_10': 字符长度在2-10之间
+        '2_100': 字符长度在2-100之间
+    search: 搜索
+    submit: 提交
+    total: 总条目数
+    unassign: 取消分配
+    update: 更新
+    view: 查看
+    warn: 警告
+  permission:
+    data:
+      description: 数据权限描述
+      id: 编号
+      modify: 修改数据权限
+      name: 数据权限名称
+      search: 查询数据权限
+    interface:
+      add: 添加接口权限
+      backend:
+        description: 接口描述
+        name: 接口名称
+        status: 接口状态
+      confirm:
+        delete: 是否确认删除选定接口权限？
+      description: 接口权限描述
+      id: 编号
+      import: 导入后台接口
+      modify: 编辑接口权限
+      name: 接口权限名称
+      noData: 未搜索到任何接口权限
+      noInterfaceData: 未搜索到任何后台权限
+      search: 查询所有接口
+    menu:
+      addChild: 添加子菜单
+      description: 菜单权限描述
+      modify: 修改菜单权限
+      name: 菜单权限名称
+      route: 菜单权限路由
+    operation:
+      add: 添加操作权限
+      assignment: 分配接口权限
+      confirm:
+        delete: 是否确定删除选定操作权限
+        remove: 是否确认从该操作权限中移除选定接口权限
+      description: 操作权限描述
+      key: 操作权限关键字
+      modify: 修改操作权限
+      name: 操权限作名称
+      noData: 未搜索到任何操作权限
+      noInterface: 还未配置关联接口
+      search: 查询操作权限
+    rule:
+      require:
+        description: 权限描述不允许为空
+        key: 关键字不允许为空
+        name: 权限名称不允许为空
+        route: 菜单路由不允许为空
+  role:
+    add: 创建角色
+    assignment:
+      data: 分配数据权限
+      menu: 分配菜单权限
+      operation: 分配操作权限
+      title: 分配角色权限
+    confirm:
+      delete: 是否确认删除选定角色
+    description: 角色描述
+    error:
+      noRoleSelected: 请先选择角色
+      roleNotExist: 角色不存在
+    modify: 修改角色
+    name: 角色名称
+    rule:
+      require:
+        description: 角色描述不允许为空
+        name: 角色名称不允许为空
+    search: 查询角色
+router:
+  main:
+    account: 账户管理
+    dashboard: 首页
+    data: 数据权限管理
+    interface: 接口权限管理
+    login: 登录
+    logout: 退出登录
+    menu: 菜单权限管理
+    notFound: 404
+    operation: 操作权限管理
+    permission: 权限管理
+    role: 角色管理
+    user: 用户管理
+    root: 仪表板
+    doc: 文档管理
+  doc:
+    detail: 文档详情
