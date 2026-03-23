@@ -13,3 +13,28 @@ logs
 *.exe
 tmp
 debugllm
+
+# Go compiled binaries (no extension, in cmd directories)
+cmd/**/*-server
+cmd/**/*-agent
+cmd/**/*-service
+
+# Backup files
+*.bak
+*.orig
+
+# Node dependencies & build output
+node_modules/
+dist/
+dist-ssr/
+
+# Release archives & binaries
+release/bin/
+*.tar.gz
+*.tar
+*.zip
+
+# OS / Editor
+.DS_Store
+.idea/
+*.swp
