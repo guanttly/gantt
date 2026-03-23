@@ -38,3 +38,14 @@ release/bin/
 .DS_Store
 .idea/
 *.swp
+
+# Go dependency checksums (regenerate with: go mod tidy)
+go.sum
+
+# Frontend assets (binary, not useful for code review)
+*.png
+*.jpg
+*.jpeg
+*.ico
+*.gif
+*.svg

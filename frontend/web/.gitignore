@@ -18,9 +18,10 @@ auto-imports.d.ts
 # Vite temporary files
 *.timestamp-*.mjs
 
-# Lock files (using pnpm)
+# Lock files
 package-lock.json
 yarn.lock
+pnpm-lock.yaml
 
 # Editor directories and files
 .vscode/*
