@@ -2,129 +2,14 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "copyRelationalGraphServerServer",
+      "label": "runServer",
       "type": "shell",
-      "command": "mkdir -p \"${workspaceFolder}/cmd/mcp-servers/relational-graph-server/config/\" && cp \"${workspaceFolder}/config/common.yml\" \"${workspaceFolder}/cmd/mcp-servers/relational-graph-server/config/\" && cp \"${workspaceFolder}/config/mcp-servers/relational-graph-server.yml\" \"${workspaceFolder}/cmd/mcp-servers/relational-graph-server/config/\"",
-      "windows": {
-        "command": "if not exist \"${workspaceFolder}\\cmd\\mcp-servers\\relational-graph-server\\config\\\" mkdir \"${workspaceFolder}\\cmd\\mcp-servers\\relational-graph-server\\config\\\" && copy \"${workspaceFolder}\\config\\common.yml\" \"${workspaceFolder}\\cmd\\mcp-servers\\relational-graph-server\\config\\\" /Y && copy \"${workspaceFolder}\\config\\mcp-servers\\relational-graph-server.yml\" \"${workspaceFolder}\\cmd\\mcp-servers\\relational-graph-server\\config\\\" /Y",
-        "options": {
-          "shell": {
-            "executable": "cmd.exe",
-            "args": ["/d", "/c"]
-          }
-        }
-      },
+      "command": "go run ./cmd/server",
       "problemMatcher": [],
       "presentation": {
-        "reveal": "silent",
+        "reveal": "always",
         "panel": "shared",
-        "focus": false,
-        "clear": true
-      }
-    },
-    {
-      "label": "copyContextServerConfig",
-      "type": "shell",
-      "command": "mkdir -p \"${workspaceFolder}/cmd/mcp-servers/context-server/config/\" && cp \"${workspaceFolder}/config/common.yml\" \"${workspaceFolder}/cmd/mcp-servers/context-server/config/\" && cp \"${workspaceFolder}/config/mcp-servers/context-server.yml\" \"${workspaceFolder}/cmd/mcp-servers/context-server/config/\"",
-      "windows": {
-        "command": "if not exist \"${workspaceFolder}\\cmd\\mcp-servers\\context-server\\config\\\" mkdir \"${workspaceFolder}\\cmd\\mcp-servers\\context-server\\config\\\" && copy \"${workspaceFolder}\\config\\common.yml\" \"${workspaceFolder}\\cmd\\mcp-servers\\context-server\\config\\\" /Y && copy \"${workspaceFolder}\\config\\mcp-servers\\context-server.yml\" \"${workspaceFolder}\\cmd\\mcp-servers\\context-server\\config\\\" /Y",
-        "options": {
-          "shell": {
-            "executable": "cmd.exe",
-            "args": ["/d", "/c"]
-          }
-        }
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "silent",
-        "panel": "shared",
-        "focus": false,
-        "clear": true
-      }
-    },
-    {
-      "label": "copyDataServerConfig",
-      "type": "shell",
-      "command": "mkdir -p \"${workspaceFolder}/cmd/mcp-servers/data-server/config/\" && cp \"${workspaceFolder}/config/common.yml\" \"${workspaceFolder}/cmd/mcp-servers/data-server/config/\" && cp \"${workspaceFolder}/config/mcp-servers/data-server.yml\" \"${workspaceFolder}/cmd/mcp-servers/data-server/config/\"",
-      "windows": {
-        "command": "if not exist \"${workspaceFolder}\\cmd\\mcp-servers\\data-server\\config\\\" mkdir \"${workspaceFolder}\\cmd\\mcp-servers\\data-server\\config\\\" && copy \"${workspaceFolder}\\config\\common.yml\" \"${workspaceFolder}\\cmd\\mcp-servers\\data-server\\config\\\" /Y && copy \"${workspaceFolder}\\config\\mcp-servers\\data-server.yml\" \"${workspaceFolder}\\cmd\\mcp-servers\\data-server\\config\\\" /Y",
-        "options": {
-          "shell": {
-            "executable": "cmd.exe",
-            "args": ["/d", "/c"]
-          }
-        }
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "silent",
-        "panel": "shared",
-        "focus": false,
-        "clear": true
-      }
-    },
-    {
-      "label": "copyRosteringServerConfig",
-      "type": "shell",
-      "command": "mkdir -p \"${workspaceFolder}/cmd/mcp-servers/rostering-server/config/\" && cp \"${workspaceFolder}/config/common.yml\" \"${workspaceFolder}/cmd/mcp-servers/rostering-server/config/\" && cp \"${workspaceFolder}/config/mcp-servers/rostering-server.yml\" \"${workspaceFolder}/cmd/mcp-servers/rostering-server/config/\"",
-      "windows": {
-        "command": "if not exist \"${workspaceFolder}\\cmd\\mcp-servers\\rostering-server\\config\\\" mkdir \"${workspaceFolder}\\cmd\\mcp-servers\\rostering-server\\config\\\" && copy \"${workspaceFolder}\\config\\common.yml\" \"${workspaceFolder}\\cmd\\mcp-servers\\rostering-server\\config\\\" /Y && copy \"${workspaceFolder}\\config\\mcp-servers\\rostering-server.yml\" \"${workspaceFolder}\\cmd\\mcp-servers\\rostering-server\\config\\\" /Y",
-        "options": {
-          "shell": {
-            "executable": "cmd.exe",
-            "args": ["/d", "/c"]
-          }
-        }
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "silent",
-        "panel": "shared",
-        "focus": false,
-        "clear": true
-      }
-    },
-    {
-      "label": "copyRosteringAgentConfig",
-      "type": "shell",
-      "command": "mkdir -p \"${workspaceFolder}/cmd/agents/rostering/config/\" && cp \"${workspaceFolder}/config/common.yml\" \"${workspaceFolder}/cmd/agents/rostering/config/\" && cp \"${workspaceFolder}/config/agents/rostering-agent.yml\" \"${workspaceFolder}/cmd/agents/rostering/config/\"",
-      "windows": {
-        "command": "if not exist \"${workspaceFolder}\\cmd\\agents\\rostering\\config\\\" mkdir \"${workspaceFolder}\\cmd\\agents\\rostering\\config\\\" && copy \"${workspaceFolder}\\config\\common.yml\" \"${workspaceFolder}\\cmd\\agents\\rostering\\config\\\" /Y && copy \"${workspaceFolder}\\config\\agents\\rostering-agent.yml\" \"${workspaceFolder}\\cmd\\agents\\rostering\\config\\\" /Y",
-        "options": {
-          "shell": {
-            "executable": "cmd.exe",
-            "args": ["/d", "/c"]
-          }
-        }
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "silent",
-        "panel": "shared",
-        "focus": false,
-        "clear": true
-      }
-    },
-    {
-      "label": "copyManagementServiceConfig",
-      "type": "shell",
-      "command": "mkdir -p \"${workspaceFolder}/cmd/services/management-service/config/\" && cp \"${workspaceFolder}/config/common.yml\" \"${workspaceFolder}/cmd/services/management-service/config/\" && cp \"${workspaceFolder}/config/management-service.yml\" \"${workspaceFolder}/cmd/services/management-service/config/\"",
-      "windows": {
-        "command": "if not exist \"${workspaceFolder}\\cmd\\services\\management-service\\config\\\" mkdir \"${workspaceFolder}\\cmd\\services\\management-service\\config\\\" && copy \"${workspaceFolder}\\config\\common.yml\" \"${workspaceFolder}\\cmd\\services\\management-service\\config\\\" /Y && copy \"${workspaceFolder}\\config\\management-service.yml\" \"${workspaceFolder}\\cmd\\services\\management-service\\config\\\" /Y",
-        "options": {
-          "shell": {
-            "executable": "cmd.exe",
-            "args": ["/d", "/c"]
-          }
-        }
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "silent",
-        "panel": "shared",
-        "focus": false,
-        "clear": true
+        "focus": false
       }
     }
   ]

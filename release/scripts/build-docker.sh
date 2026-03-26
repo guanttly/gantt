@@ -60,7 +60,7 @@ REQUIRED_FILES=(
     "$PROJECT_ROOT/Dockerfile"
     "$PROJECT_ROOT/go.mod"
     "$PROJECT_ROOT/frontend/web/package.json"
-    "$PROJECT_ROOT/config/common.yml"
+  "$PROJECT_ROOT/config/config.yml"
 )
 
 for file in "${REQUIRED_FILES[@]}"; do
@@ -250,14 +250,8 @@ docker-compose up -d
 ### 查看各服务日志
 
 \`\`\`bash
-# 管理服务日志
-docker exec gantt-app tail -f /var/log/management-service.log
-
-# MCP 服务器日志
-docker exec gantt-app tail -f /var/log/rostering-server.log
-
-# 智能体日志
-docker exec gantt-app tail -f /var/log/rostering-agent.log
+# 应用日志
+docker exec gantt-app tail -f /var/log/gantt-server.log
 
 # Nginx 日志
 docker exec gantt-app tail -f /var/log/nginx/error.log
@@ -267,7 +261,7 @@ docker exec gantt-app tail -f /var/log/nginx/access.log
 ### 检查服务进程
 
 \`\`\`bash
-docker exec gantt-app ps aux | grep -E "management-service|rostering-server|rostering-agent|nginx"
+docker exec gantt-app ps aux | grep -E "gantt-server|nginx"
 \`\`\`
 
 ## 环境要求

@@ -1,8 +1,0 @@
-# 数据库配置
-database:
-  mysql:
-    dbname: "jusha-software-gantt-rostering" # 数据库名称
-
-# 服务端口
-ports:
-  http_port: 9605 # HTTP 服务端口

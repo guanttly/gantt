@@ -64,8 +64,8 @@ if not exist "%PROJECT_ROOT%frontend\web\package.json" (
     echo 错误: 缺少 frontend/web/package.json
     set "ERROR=1"
 )
-if not exist "%PROJECT_ROOT%config\common.yml" (
-    echo 错误: 缺少 config/common.yml
+if not exist "%PROJECT_ROOT%config\config.yml" (
+    echo 错误: 缺少 config/config.yml
     set "ERROR=1"
 )
 

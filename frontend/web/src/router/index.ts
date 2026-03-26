@@ -1,16 +1,16 @@
 import type { App } from 'vue'
-import { createRouter, createWebHashHistory } from 'vue-router'
-import { setupRouterGuard } from './router-guards'
+import { createRouter, createWebHistory } from 'vue-router'
+import { setupGuards } from './guards'
 import { allRoutes } from './routes'
 
 const router = createRouter({
   routes: allRoutes,
-  history: createWebHashHistory(),
+  history: createWebHistory(),
 })
 
 export function installRouter(app: App<Element>) {
   app.use(router)
-  setupRouterGuard(router)
+  setupGuards(router)
 }
 
 export default router

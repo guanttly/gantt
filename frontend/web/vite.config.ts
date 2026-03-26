@@ -57,29 +57,28 @@ export default defineConfig(({ mode }) => {
       port: 3000, // 根据需要修改端口
       cors: true, // 启用 CORS
       proxy: {
-        // WebSocket代理 - 排班agent (rostering)
+        // WebSocket 代理
         '^/ws': {
-          target: 'ws://192.168.119.128:9601',
+          target: 'ws://localhost:8080',
           ws: true,
           changeOrigin: true,
         },
-        // 排班 agent 的会话相关 API（需要代理到排班 agent）
-        '^/api/sessions': {
-          target: 'http://192.168.119.128:9601',
-          changeOrigin: true,
-        },
-        // 管理服务的 API（统一使用 /api/management 前缀）
-        '^/api/management': {
-          target: 'http://192.168.119.128:9605',
-          changeOrigin: true,
-          rewrite: (path) => {
-            return path.replace(/^\/api\/management/, '')
-          },
-        },
-        // 其他 API 代理到管理服务 (management-service)
+        // API 代理
         '^/api': {
-          target: 'http://192.168.119.128:9605',
+          target: 'http://localhost:8080',
           changeOrigin: true,
+        },
+      },
+    },
+    build: {
+      outDir: 'dist',
+      sourcemap: false,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'element-plus': ['element-plus'],
+            'echarts': ['echarts'],
+          },
         },
       },
     },

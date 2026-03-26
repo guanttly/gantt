@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS user_node_roles;
+DROP TABLE IF EXISTS roles;
+DROP TABLE IF EXISTS users;

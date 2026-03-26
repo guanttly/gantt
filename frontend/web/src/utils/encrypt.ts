@@ -1,5 +1,10 @@
 import JSEncrypt from 'jsencrypt'
-import { getRsaKey } from '@/api/login'
+import client from '@/api/client'
+
+async function getRsaKey(): Promise<string> {
+  const res = await client.get<string>('/auth/rsa-key')
+  return res.data
+}
 
 // 获取经过Rsa公钥加密后的值
 export async function getRsaVal(originVal: string) {

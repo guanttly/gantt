@@ -1,12 +1,10 @@
 # Gantt Application - Docker 一键部署
 
-本文档说明如何使用 Docker 一键部署 Gantt 应用（包含管理服务、MCP 服务器、智能体、Nginx 和前端）。
+本文档说明如何使用 Docker 一键部署 Gantt 应用（包含单体后端、Nginx 和前端）。
 
 ## 📦 包含组件
 
-- **管理服务** (Management Service) - 端口 8080
-- **MCP 服务器** (Rostering MCP Server) - 端口 8081  
-- **智能体** (Rostering Agent) - 端口 8082
+- **单体后端** (Gantt Server) - 端口 8080
 - **Nginx** - 端口 80（前端 + 反向代理）
 - **前端应用** (Vue3)
 
@@ -58,8 +56,6 @@ docker run -d \
   --name gantt-app \
   -p 80:80 \
   -p 8080:8080 \
-  -p 8081:8081 \
-  -p 8082:8082 \
   gantt-app:latest
 ```
 
@@ -81,8 +77,6 @@ docker run -d \
   --name gantt-app \
   -p 80:80 \
   -p 8080:8080 \
-  -p 8081:8081 \
-  -p 8082:8082 \
   gantt-app:latest
 ```
 
@@ -155,10 +149,8 @@ docker logs gantt-app
 # 实时跟踪
 docker logs -f gantt-app
 
-# 各服务日志
-docker exec gantt-app tail -f /var/log/management-service.log
-docker exec gantt-app tail -f /var/log/rostering-server.log
-docker exec gantt-app tail -f /var/log/rostering-agent.log
+# 应用与 Nginx 日志
+docker exec gantt-app tail -f /var/log/gantt-server.log
 docker exec gantt-app tail -f /var/log/nginx/access.log
 ```
 
@@ -249,12 +241,8 @@ docker run -d --name gantt-app -p 80:80 gantt-app:latest
 │   │   └── default.conf           # Nginx 站点配置
 │   └── DOCKER_README.md           # Docker 详细说明
 └── config/                        # 应用配置文件
-    ├── common.yml
-    ├── management-service.yml
-    ├── agents/
-    │   └── rostering-agent.yml
-    └── mcp-servers/
-        └── rostering-server.yml
+  ├── config.yml
+  └── config.example.yml
 ```
 
 ## 🔒 安全建议

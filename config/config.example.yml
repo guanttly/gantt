@@ -1,0 +1,69 @@
+# AI 智能排班 SaaS 平台 — 配置样例
+# 复制本文件为 config.yml 并修改配置值
+# 环境变量覆盖：GANTT_<SECTION>_<KEY>，例如 GANTT_SERVER_PORT=9090
+
+server:
+  port: 8080
+  mode: development        # development / production
+  read_timeout: 15s
+  write_timeout: 15s
+  shutdown_timeout: 10s
+
+database:
+  host: localhost
+  port: 3306
+  name: gantt_saas
+  user: root
+  password: "your_password_here"
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime: 3600  # 秒
+
+redis:
+  addr: localhost:6379
+  password: ""
+  db: 0
+
+log:
+  level: info              # debug / info / warn / error
+  format: json             # json / console
+  output: stdout           # stdout / 文件路径
+
+jwt:
+  secret: "gantt-saas-secret-change-me"
+  access_token_ttl: 2h
+  refresh_token_ttl: 168h
+  issuer: "gantt-saas"
+
+ai:
+  enabled: false           # 全局 AI 开关
+  default_provider: ""
+
+  openai:
+    enabled: false
+    api_key: ""
+    base_url: ""
+    model: "gpt-4o-mini"
+    timeout: 60
+
+  bailian:
+    enabled: false
+    api_key: ""
+    base_url: "https://dashscope.aliyuncs.com"
+    model: "qwen-turbo"
+    timeout: 60
+
+  ollama:
+    enabled: false
+    base_url: "http://localhost:11434"
+    model: "qwen2.5:7b"
+    timeout: 300
+
+  quota:
+    default_monthly_tokens: 100000
+
+# 默认平台管理员（首次启动时自动创建，幂等）
+admin:
+  username: "admin"
+  email: "admin@gantt.local"
+  password: "Admin@123456"    # 首次登录强制要求重置密码

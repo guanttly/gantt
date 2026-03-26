@@ -76,24 +76,8 @@ if errorlevel 1 (
 )
 
 REM 检查各服务进程
-echo   - Management Service: 
-docker exec %CONTAINER_NAME% ps aux | findstr "management-service" >nul
-if errorlevel 1 (
-    echo     × 未运行
-) else (
-    echo     √ 运行中
-)
-
-echo   - Rostering Server: 
-docker exec %CONTAINER_NAME% ps aux | findstr "rostering-server" >nul
-if errorlevel 1 (
-    echo     × 未运行
-) else (
-    echo     √ 运行中
-)
-
-echo   - Rostering Agent: 
-docker exec %CONTAINER_NAME% ps aux | findstr "rostering-agent" >nul
+echo   - Gantt Server: 
+docker exec %CONTAINER_NAME% ps aux | findstr "gantt-server" >nul
 if errorlevel 1 (
     echo     × 未运行
 ) else (

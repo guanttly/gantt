@@ -29,7 +29,6 @@
 ## 工作流事件定义
 
 ```typescript
-// types/event.ts
 enum WorkFlowEventType {
   // 排班创建工作流
   Schedule_Create_Start = '_start_',
@@ -44,6 +43,8 @@ enum WorkFlowEventType {
   Schedule_Create_UserCancelled = '_schedule_create_user_cancelled_',
 }
 ```
+
+这些事件值由交互逻辑直接发送给后端，不再单独维护一个前端事件常量文件。
 
 ## 用户交互流程
 

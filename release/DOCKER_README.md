@@ -79,8 +79,6 @@ docker run -d \
   --name gantt-app \
   -p 80:80 \
   -p 8080:8080 \
-  -p 8081:8081 \
-  -p 8082:8082 \
   gantt-app:latest
 ```
 
@@ -92,17 +90,10 @@ docker run -d \
    - 前端静态文件服务
    - 反向代理 API 请求到后端服务
 
-2. **Management Service** (端口 8080)
-   - 管理服务 API
-   - 路由前缀: `/api/management/`
-
-3. **Rostering MCP Server** (端口 8081)
-   - MCP 协议服务器
-   - WebSocket 路由: `/api/mcp/`
-
-4. **Rostering Agent** (端口 8082)
-   - 智能体服务
-   - WebSocket 路由: `/api/agent/`
+2. **Gantt Server** (端口 8080)
+  - 单体后端服务
+  - HTTP 路由前缀: `/api/management-service/`
+  - 兼容旧 WebSocket 路由: `/api/mcp/`、`/api/agent/`
 
 ## 配置说明
 
@@ -168,9 +159,7 @@ docker logs gantt-app
 docker logs -f gantt-app
 
 # 查看特定服务日志
-docker exec gantt-app tail -f /var/log/management-service.log
-docker exec gantt-app tail -f /var/log/rostering-server.log
-docker exec gantt-app tail -f /var/log/rostering-agent.log
+docker exec gantt-app tail -f /var/log/gantt-server.log
 docker exec gantt-app tail -f /var/log/nginx/access.log
 docker exec gantt-app tail -f /var/log/nginx/error.log
 ```
@@ -190,9 +179,9 @@ docker run -d \
 ### 反向代理路由规则
 
 - `/` → 前端静态文件
-- `/api/management/` → Management Service (HTTP)
-- `/api/mcp/` → Rostering MCP Server (WebSocket)
-- `/api/agent/` → Rostering Agent (WebSocket)
+- `/api/management-service/` → Gantt Server (HTTP)
+- `/api/mcp/` → Gantt Server（兼容旧路径）
+- `/api/agent/` → Gantt Server（兼容旧路径）
 - `/health` → 健康检查
 
 ### 自定义域名

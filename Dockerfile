@@ -32,7 +32,7 @@ ENV VITE_WS_URL=/gantt/ws
 RUN pnpm run build
 
 # 多阶段构建 - 第二阶段：构建 Go 服务
-FROM golang:1.24-alpine AS go-builder
+FROM golang:1.25-alpine AS go-builder
 
 # 配置 Alpine 使用国内镜像源（加速软件包下载）
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
@@ -46,15 +46,8 @@ ENV GOSUMDB=sum.golang.google.cn
 
 WORKDIR /app
 
-# 复制 go.mod 和 go.sum（所有模块）
+# 复制根模块依赖文件
 COPY go.mod go.sum ./
-COPY pkg/go.mod pkg/go.sum ./pkg/
-COPY agents/rostering/go.mod agents/rostering/go.sum ./agents/rostering/
-COPY sdk/rostering/go.mod sdk/rostering/go.sum ./sdk/rostering/
-COPY sdk/context/go.mod sdk/context/go.sum ./sdk/context/
-COPY mcp-servers/rostering/go.mod mcp-servers/rostering/go.sum ./mcp-servers/rostering/
-COPY mcp-servers/context/go.mod mcp-servers/context/go.sum ./mcp-servers/context/
-COPY services/management-service/go.mod services/management-service/go.sum ./services/management-service/
 
 # 下载依赖
 RUN go mod download
@@ -62,21 +55,9 @@ RUN go mod download
 # 复制所有源代码
 COPY . .
 
-# 构建管理服务
+# 构建当前单体入口
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' \
-    -o /app/bin/management-service ./cmd/services/management-service
-
-# 构建 MCP Server
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' \
-    -o /app/bin/rostering-server ./cmd/mcp-servers/rostering-server
-
-# 构建 Context MCP Server
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' \
-    -o /app/bin/context-server ./cmd/mcp-servers/context-server
-
-# 构建智能体
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' \
-    -o /app/bin/rostering-agent ./cmd/agents/rostering
+    -o /app/bin/gantt-server ./cmd/server
 
 # 多阶段构建 - 第三阶段：运行时镜像
 FROM alpine:latest
@@ -93,32 +74,15 @@ RUN apk add --no-cache ca-certificates nginx bash tzdata && \
 WORKDIR /app
 
 # 从构建阶段复制编译好的二进制文件
-COPY --from=go-builder /app/bin/management-service /app/bin/
-COPY --from=go-builder /app/bin/rostering-server /app/bin/
-COPY --from=go-builder /app/bin/context-server /app/bin/
-COPY --from=go-builder /app/bin/rostering-agent /app/bin/
+COPY --from=go-builder /app/bin/gantt-server /app/bin/
 
 # 从构建阶段复制前端构建产物
 COPY --from=frontend-builder /build/dist /usr/share/nginx/html
 
-# 为每个服务创建配置目录并复制配置文件
-RUN mkdir -p /app/services/management-service/config && \
-    mkdir -p /app/mcp-servers/rostering-server/config && \
-    mkdir -p /app/mcp-servers/context-server/config && \
-    mkdir -p /app/agents/rostering/config
+# 创建应用配置目录并复制默认配置
+RUN mkdir -p /app/config
 
-# 复制生产配置文件到各服务目录（使用 release/config 避免与开发配置冲突）
-COPY release/config/common.yml /app/services/management-service/config/
-COPY release/config/management-service.yml /app/services/management-service/config/
-
-COPY release/config/common.yml /app/mcp-servers/rostering-server/config/
-COPY release/config/mcp-servers/rostering-server.yml /app/mcp-servers/rostering-server/config/
-
-COPY release/config/common.yml /app/mcp-servers/context-server/config/
-COPY release/config/mcp-servers/context-server.yml /app/mcp-servers/context-server/config/
-
-COPY release/config/common.yml /app/agents/rostering/config/
-COPY release/config/agents/rostering-agent.yml /app/agents/rostering/config/
+COPY config/config.yml /app/config/
 
 # 复制 nginx 配置（根据部署模式选择不同的配置）
 COPY release/docker/nginx.conf /etc/nginx/nginx.conf
@@ -130,11 +94,8 @@ RUN chmod +x /app/entrypoint.sh
 
 # 暴露端口
 # 80 - Nginx (前端和反向代理)
-# 8080 - Management Service
-# 8081 - Rostering Server (MCP)
-# 8083 - Context Server (MCP)
-# 8082 - Rostering Agent
-EXPOSE 80 8080 8081 8082 8083
+# 8080 - 单体后端服务
+EXPOSE 80 8080
 
 # 设置启动命令
 ENTRYPOINT ["/app/entrypoint.sh"]

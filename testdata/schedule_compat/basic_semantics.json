@@ -1,0 +1,63 @@
+{
+  "fixed_assignments": {
+    "shift_id": "day",
+    "shift_name": "白班",
+    "expected_total_assignments": 4,
+    "expected_unique_employees": 2,
+    "dates": [
+      {
+        "date": "2026-03-23",
+        "staff_ids": ["employee-001", "employee-002"],
+        "required_count": 2
+      },
+      {
+        "date": "2026-03-24",
+        "staff_ids": ["employee-001", "employee-002"],
+        "required_count": 2
+      }
+    ]
+  },
+  "underfill": {
+    "shift": {
+      "id": "night",
+      "name": "夜班",
+      "start_time": "20:00",
+      "end_time": "08:00"
+    },
+    "date": "2026-03-23",
+    "required_count": 3,
+    "staff": [
+      { "id": "employee-001", "name": "张三" },
+      { "id": "employee-002", "name": "李四" }
+    ],
+    "expected_assigned": 2,
+    "expected_unfilled": 1
+  },
+  "source_validation": {
+    "source_shift_id": "day",
+    "target_shift_id": "night",
+    "date": "2026-03-23",
+    "allowed_employee_id": "employee-001",
+    "disallowed_employee_id": "employee-002",
+    "rule_id": "r-source",
+    "rule_name": "夜班来自白班"
+  },
+  "exclusive_semantics": {
+    "date": "2026-03-23",
+    "shift_ids": ["day", "night"],
+    "staff": [
+      { "id": "employee-001", "name": "张三" },
+      { "id": "employee-002", "name": "李四" }
+    ],
+    "requirements": {
+      "day": 1,
+      "night": 1
+    },
+    "rule_id": "r-exclusive",
+    "rule_name": "白夜班同日排他",
+    "expected_total_assignments": 2,
+    "expected_unique_employees": 2,
+    "expected_violations": 0,
+    "expected_conflicts": 0
+  }
+}

@@ -9,7 +9,6 @@ packages
 model_data
 logs
 **/bin
-/docs
 *.exe
 tmp
 debugllm
