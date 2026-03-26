@@ -86,7 +86,7 @@ func TestService_Register_Success(t *testing.T) {
 		Email:     "zs@example.com",
 		Password:  "Abc12345",
 		OrgNodeID: "dept-001",
-		RoleName:  string(RoleScheduler),
+		RoleName:  string(RoleEmployee),
 	})
 	if err != nil {
 		t.Fatalf("Register() error = %v", err)
@@ -144,7 +144,7 @@ func TestService_Register_DuplicateUsername(t *testing.T) {
 
 	_, err := svc.Register(ctx, RegisterInput{
 		Username: "dup_user", Email: "a@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 	if err != nil {
 		t.Fatalf("第一次注册失败: %v", err)
@@ -169,7 +169,7 @@ func TestService_Register_DuplicateEmail(t *testing.T) {
 
 	_, err := svc.Register(ctx, RegisterInput{
 		Username: "user_a", Email: "dup@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 	if err != nil {
 		t.Fatalf("第一次注册失败: %v", err)
@@ -204,6 +204,53 @@ func TestService_Register_NoNode(t *testing.T) {
 	}
 }
 
+func TestService_Register_DefaultsToEmployeeRole(t *testing.T) {
+	svc, db := setupTestService(t)
+	ctx := context.Background()
+
+	if err := svc.SeedSystemRoles(ctx); err != nil {
+		t.Fatalf("初始化系统角色失败: %v", err)
+	}
+	seedTestOrgNode(t, db, "dept-001", "心内科", "/org1/dept-001", 1)
+
+	result, err := svc.Register(ctx, RegisterInput{
+		Username:  "default_employee",
+		Email:     "default_employee@example.com",
+		Password:  "Abc12345",
+		OrgNodeID: "dept-001",
+	})
+	if err != nil {
+		t.Fatalf("Register(default employee) error = %v", err)
+	}
+	if result.CurrentNode == nil {
+		t.Fatal("CurrentNode should not be nil")
+	}
+	if result.CurrentNode.RoleName != string(RoleEmployee) {
+		t.Errorf("CurrentNode.RoleName = %q, want %q", result.CurrentNode.RoleName, string(RoleEmployee))
+	}
+}
+
+func TestService_Register_RejectsPrivilegedRole(t *testing.T) {
+	svc, db := setupTestService(t)
+	ctx := context.Background()
+
+	if err := svc.SeedSystemRoles(ctx); err != nil {
+		t.Fatalf("初始化系统角色失败: %v", err)
+	}
+	seedTestOrgNode(t, db, "dept-001", "心内科", "/org1/dept-001", 1)
+
+	_, err := svc.Register(ctx, RegisterInput{
+		Username:  "bad_register",
+		Email:     "bad_register@example.com",
+		Password:  "Abc12345",
+		OrgNodeID: "dept-001",
+		RoleName:  string(RoleScheduler),
+	})
+	if err != ErrPublicRegisterRole {
+		t.Errorf("Register(privileged role) error = %v, want %v", err, ErrPublicRegisterRole)
+	}
+}
+
 // ── 验收标准 2: 登录 ──
 
 func TestService_Login_Success(t *testing.T) {
@@ -218,7 +265,7 @@ func TestService_Login_Success(t *testing.T) {
 	// 先注册
 	_, err := svc.Register(ctx, RegisterInput{
 		Username: "logintest", Email: "login@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 	if err != nil {
 		t.Fatalf("Register error = %v", err)
@@ -250,8 +297,8 @@ func TestService_Login_Success(t *testing.T) {
 	if result.CurrentNode.NodeID != "dept-001" {
 		t.Errorf("CurrentNode.NodeID = %q, want %q", result.CurrentNode.NodeID, "dept-001")
 	}
-	if result.CurrentNode.RoleName != string(RoleScheduler) {
-		t.Errorf("CurrentNode.RoleName = %q, want %q", result.CurrentNode.RoleName, string(RoleScheduler))
+	if result.CurrentNode.RoleName != string(RoleEmployee) {
+		t.Errorf("CurrentNode.RoleName = %q, want %q", result.CurrentNode.RoleName, string(RoleEmployee))
 	}
 
 	// 验证 JWT Claims 正确
@@ -269,8 +316,8 @@ func TestService_Login_Success(t *testing.T) {
 	if claims.OrgNodePath != "/org1/dept-001" {
 		t.Errorf("Claims.OrgNodePath = %q, want %q", claims.OrgNodePath, "/org1/dept-001")
 	}
-	if claims.RoleName != string(RoleScheduler) {
-		t.Errorf("Claims.RoleName = %q, want %q", claims.RoleName, string(RoleScheduler))
+	if claims.RoleName != string(RoleEmployee) {
+		t.Errorf("Claims.RoleName = %q, want %q", claims.RoleName, string(RoleEmployee))
 	}
 }
 
@@ -285,7 +332,7 @@ func TestService_Login_WrongPassword(t *testing.T) {
 
 	_, _ = svc.Register(ctx, RegisterInput{
 		Username: "wrongpw", Email: "wrongpw@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	_, err := svc.Login(ctx, LoginInput{
@@ -319,7 +366,7 @@ func TestService_Login_DisabledUser(t *testing.T) {
 
 	_, _ = svc.Register(ctx, RegisterInput{
 		Username: "disabled", Email: "disabled@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	// 禁用用户
@@ -344,7 +391,7 @@ func TestService_Login_AutoSelectNode(t *testing.T) {
 
 	_, _ = svc.Register(ctx, RegisterInput{
 		Username: "autonode", Email: "autonode@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	// 不指定 OrgNodeID，应自动选取第一个可用节点
@@ -372,7 +419,7 @@ func TestService_Login_TokenValid(t *testing.T) {
 
 	_, _ = svc.Register(ctx, RegisterInput{
 		Username: "tokentest", Email: "token@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	result, _ := svc.Login(ctx, LoginInput{
@@ -420,7 +467,7 @@ func TestService_RefreshToken_Success(t *testing.T) {
 
 	_, _ = svc.Register(ctx, RegisterInput{
 		Username: "refreshtest", Email: "refresh@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	loginResult, _ := svc.Login(ctx, LoginInput{
@@ -471,7 +518,7 @@ func TestService_RefreshToken_DisabledUser(t *testing.T) {
 
 	_, _ = svc.Register(ctx, RegisterInput{
 		Username: "refresh_disabled", Email: "rd@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	loginResult, _ := svc.Login(ctx, LoginInput{
@@ -502,7 +549,7 @@ func TestService_SwitchNode_Success(t *testing.T) {
 	// 注册并关联到 dept-001
 	regResult, _ := svc.Register(ctx, RegisterInput{
 		Username: "switchtest", Email: "switch@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	// 分配 dept-002 角色
@@ -558,7 +605,7 @@ func TestService_SwitchNode_NoPermission(t *testing.T) {
 
 	regResult, _ := svc.Register(ctx, RegisterInput{
 		Username: "noperm", Email: "noperm@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	jwtMgr := NewJWTManager(JWTConfig{Secret: "test-secret-for-integration"})
@@ -614,7 +661,7 @@ func TestService_ResetPassword_Success(t *testing.T) {
 
 	regResult, _ := svc.Register(ctx, RegisterInput{
 		Username: "resetpw", Email: "resetpw@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	// 重置密码
@@ -657,7 +704,7 @@ func TestService_ResetPassword_WrongOldPassword(t *testing.T) {
 
 	regResult, _ := svc.Register(ctx, RegisterInput{
 		Username: "wrongold", Email: "wrongold@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	err := svc.ResetPassword(ctx, regResult.User.ID, ResetPasswordInput{
@@ -680,7 +727,7 @@ func TestService_ResetPassword_WeakNewPassword(t *testing.T) {
 
 	regResult, _ := svc.Register(ctx, RegisterInput{
 		Username: "weaknew", Email: "weaknew@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	err := svc.ResetPassword(ctx, regResult.User.ID, ResetPasswordInput{
@@ -706,7 +753,7 @@ func TestService_GetMe_Success(t *testing.T) {
 
 	regResult, _ := svc.Register(ctx, RegisterInput{
 		Username: "metest", Email: "metest@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	// 增加第二个节点
@@ -773,11 +820,11 @@ func TestService_AssignRole_DuplicateRole(t *testing.T) {
 
 	regResult, _ := svc.Register(ctx, RegisterInput{
 		Username: "duprol", Email: "duprol@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	_, err := svc.AssignRole(ctx, AssignRoleInput{
-		UserID: regResult.User.ID, OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		UserID: regResult.User.ID, OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 	if err != ErrNodeRoleExists {
 		t.Errorf("重复分配角色 error = %v, want %v", err, ErrNodeRoleExists)
@@ -818,7 +865,7 @@ func TestService_AssignRole_InvalidNode(t *testing.T) {
 	})
 
 	_, err := svc.AssignRole(ctx, AssignRoleInput{
-		UserID: regResult.User.ID, OrgNodeID: "nonexistent-node", RoleName: string(RoleScheduler),
+		UserID: regResult.User.ID, OrgNodeID: "nonexistent-node", RoleName: string(RoleEmployee),
 	})
 	if err != ErrNoNodePermission {
 		t.Errorf("分配到不存在的节点 error = %v, want %v", err, ErrNoNodePermission)
@@ -835,7 +882,7 @@ func TestService_AssignRole_InvalidUser(t *testing.T) {
 	seedTestOrgNode(t, db, "dept-001", "心内科", "/org1/dept-001", 1)
 
 	_, err := svc.AssignRole(ctx, AssignRoleInput{
-		UserID: "nonexistent-user", OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		UserID: "nonexistent-user", OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 	if err != ErrUserNotFound {
 		t.Errorf("分配给不存在的用户 error = %v, want %v", err, ErrUserNotFound)
@@ -895,7 +942,7 @@ func TestService_RemoveRole(t *testing.T) {
 
 	regResult, _ := svc.Register(ctx, RegisterInput{
 		Username: "removerol", Email: "removerol@example.com", Password: "Abc12345",
-		OrgNodeID: "dept-001", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-001", RoleName: string(RoleEmployee),
 	})
 
 	// 查询 UNR ID
@@ -931,7 +978,7 @@ func TestService_E2E_RegisterLoginSwitchRefresh(t *testing.T) {
 	// Step 1: 注册用户并关联到 dept-A
 	regResult, err := svc.Register(ctx, RegisterInput{
 		Username: "e2e_user", Email: "e2e@example.com", Password: "E2ePass123",
-		OrgNodeID: "dept-A", RoleName: string(RoleScheduler),
+		OrgNodeID: "dept-A", RoleName: string(RoleEmployee),
 	})
 	if err != nil {
 		t.Fatalf("Step1 Register error = %v", err)

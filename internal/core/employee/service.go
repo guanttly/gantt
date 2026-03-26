@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"gantt-saas/internal/tenant"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -41,12 +43,21 @@ type UpdateInput struct {
 
 // Service 员工业务逻辑层。
 type Service struct {
-	repo *Repository
+	repo           *Repository
+	appRoleCleaner AppRoleCleaner
+}
+
+type AppRoleCleaner interface {
+	CleanupEmployeeRoles(ctx context.Context, employeeID string) error
 }
 
 // NewService 创建员工服务。
 func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
+}
+
+func (s *Service) SetAppRoleCleaner(cleaner AppRoleCleaner) {
+	s.appRoleCleaner = cleaner
 }
 
 // Create 创建员工。
@@ -68,19 +79,29 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*Employee, err
 	}
 
 	emp := &Employee{
-		ID:         uuid.New().String(),
-		Name:       input.Name,
-		EmployeeNo: input.EmployeeNo,
-		Phone:      input.Phone,
-		Email:      input.Email,
-		Position:   input.Position,
-		Category:   input.Category,
-		HireDate:   input.HireDate,
-		Status:     StatusActive,
+		ID:              uuid.New().String(),
+		Name:            input.Name,
+		EmployeeNo:      input.EmployeeNo,
+		Phone:           input.Phone,
+		Email:           input.Email,
+		Position:        input.Position,
+		Category:        input.Category,
+		SchedulingRole:  SchedulingRoleEmployee,
+		AppMustResetPwd: true,
+		HireDate:        input.HireDate,
+		Status:          StatusActive,
 		TenantModel: tenant.TenantModel{
 			OrgNodeID: orgNodeID,
 		},
 	}
+
+	defaultPassword := buildDefaultAppPassword(emp)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(defaultPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("生成员工应用密码失败: %w", err)
+	}
+	emp.AppPasswordHash = &[]string{string(hashedPassword)}[0]
+	emp.AppDefaultPassword = &defaultPassword
 
 	if err := s.repo.Create(ctx, emp); err != nil {
 		return nil, fmt.Errorf("创建员工失败: %w", err)
@@ -99,6 +120,24 @@ func (s *Service) GetByID(ctx context.Context, id string) (*Employee, error) {
 		return nil, err
 	}
 	return emp, nil
+}
+
+func buildDefaultAppPassword(emp *Employee) string {
+	if emp.EmployeeNo != nil && strings.TrimSpace(*emp.EmployeeNo) != "" {
+		return strings.TrimSpace(*emp.EmployeeNo) + "@App1"
+	}
+	if emp.Phone != nil && strings.TrimSpace(*emp.Phone) != "" {
+		phone := strings.TrimSpace(*emp.Phone)
+		if len(phone) > 4 {
+			phone = phone[len(phone)-4:]
+		}
+		return "Emp" + phone + "@App1"
+	}
+	identifier := emp.ID
+	if len(identifier) > 6 {
+		identifier = identifier[len(identifier)-6:]
+	}
+	return "Emp" + identifier + "@App1"
 }
 
 // Update 更新员工信息。
@@ -150,6 +189,12 @@ func (s *Service) Update(ctx context.Context, id string, input UpdateInput) (*Em
 		return nil, fmt.Errorf("更新员工失败: %w", err)
 	}
 
+	if input.Status != nil && *input.Status == StatusInactive && s.appRoleCleaner != nil {
+		if err := s.appRoleCleaner.CleanupEmployeeRoles(ctx, emp.ID); err != nil {
+			return nil, err
+		}
+	}
+
 	return emp, nil
 }
 
@@ -161,6 +206,11 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 			return ErrEmployeeNotFound
 		}
 		return err
+	}
+	if s.appRoleCleaner != nil {
+		if err := s.appRoleCleaner.CleanupEmployeeRoles(ctx, id); err != nil {
+			return err
+		}
 	}
 	return s.repo.Delete(ctx, id)
 }

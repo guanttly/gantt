@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"gantt-saas/internal/ai"
 	aiapi "gantt-saas/internal/ai/api"
@@ -14,6 +15,7 @@ import (
 	"gantt-saas/internal/ai/quota"
 	"gantt-saas/internal/ai/ruleparse"
 	"gantt-saas/internal/auth"
+	"gantt-saas/internal/core/approle"
 	"gantt-saas/internal/core/employee"
 	"gantt-saas/internal/core/group"
 	"gantt-saas/internal/core/leave"
@@ -102,8 +104,12 @@ func main() {
 
 type appDependencies struct {
 	jwtManager          *auth.JWTManager
+	appJWTManager       *auth.JWTManager
+	appRoleService      *approle.Service
 	tenantHandler       *tenant.Handler
 	authHandler         *auth.Handler
+	appAuthHandler      *auth.AppHandler
+	appRoleHandler      *approle.Handler
 	employeeHandler     *employee.Handler
 	groupHandler        *group.Handler
 	shiftHandler        *shift.Handler
@@ -112,6 +118,8 @@ type appDependencies struct {
 	scheduleHandler     *schedule.Handler
 	aiHandler           *aiapi.Handler
 	dashboardHandler    *admin.DashboardHandler
+	organizationHandler *admin.OrganizationHandler
+	platformUserHandler *admin.PlatformUserHandler
 	systemConfigHandler *admin.SystemConfigHandler
 	auditLogger         *audit.Logger
 	auditHandler        *audit.Handler
@@ -137,15 +145,28 @@ func initDependencies(
 		AccessTokenTTL:  cfg.JWT.AccessTokenTTL,
 		RefreshTokenTTL: cfg.JWT.RefreshTokenTTL,
 	})
+	appJWTManager := auth.NewJWTManager(auth.JWTConfig{
+		Secret:          cfg.JWT.Secret,
+		Issuer:          cfg.JWT.Issuer + ":app",
+		AccessTokenTTL:  cfg.JWT.AccessTokenTTL,
+		RefreshTokenTTL: cfg.JWT.RefreshTokenTTL,
+	})
 	authSvc := auth.NewService(authRepo, tenantRepo, jwtManager, rdb)
 	authHandler := auth.NewHandler(authSvc)
+	appAuthSvc := auth.NewAppService(authRepo, appJWTManager)
+	appAuthHandler := auth.NewAppHandler(appAuthSvc)
+	appRoleRepo := approle.NewRepository(db)
+	appRoleSvc := approle.NewService(appRoleRepo, tenantRepo)
+	appRoleHandler := approle.NewHandler(appRoleSvc)
 
 	employeeRepo := employee.NewRepository(db)
 	employeeSvc := employee.NewService(employeeRepo)
+	employeeSvc.SetAppRoleCleaner(appRoleSvc)
 	employeeHandler := employee.NewHandler(employeeSvc)
 
 	groupRepo := group.NewRepository(db)
 	groupSvc := group.NewService(groupRepo)
+	groupSvc.SetAppRoleSyncer(appRoleSvc)
 	groupHandler := group.NewHandler(groupSvc)
 
 	shiftRepo := shift.NewRepository(db)
@@ -192,11 +213,14 @@ func initDependencies(
 	subHandler := subscription.NewHandler(subSvc)
 
 	dashboardHandler := admin.NewDashboardHandler(db)
+	organizationHandler := admin.NewOrganizationHandler(admin.NewOrganizationService(db))
+	platformUserHandler := admin.NewPlatformUserHandler(admin.NewPlatformUserService(db))
 	systemConfigHandler := admin.NewSystemConfigHandler(db)
 
 	if err := autoMigrate(
 		tenantRepo,
 		authRepo,
+		appRoleRepo,
 		employeeRepo,
 		groupRepo,
 		shiftRepo,
@@ -210,6 +234,7 @@ func initDependencies(
 	); err != nil {
 		return nil, err
 	}
+	startBackgroundWorkers(ctx, appRoleSvc, logger)
 
 	if err := authSvc.SeedSystemRoles(ctx); err != nil {
 		return nil, fmt.Errorf("初始化系统角色失败: %w", err)
@@ -221,8 +246,12 @@ func initDependencies(
 
 	return &appDependencies{
 		jwtManager:          jwtManager,
+		appJWTManager:       appJWTManager,
+		appRoleService:      appRoleSvc,
 		tenantHandler:       tenantHandler,
 		authHandler:         authHandler,
+		appAuthHandler:      appAuthHandler,
+		appRoleHandler:      appRoleHandler,
 		employeeHandler:     employeeHandler,
 		groupHandler:        groupHandler,
 		shiftHandler:        shiftHandler,
@@ -231,6 +260,8 @@ func initDependencies(
 		scheduleHandler:     scheduleHandler,
 		aiHandler:           aiHandler,
 		dashboardHandler:    dashboardHandler,
+		organizationHandler: organizationHandler,
+		platformUserHandler: platformUserHandler,
 		systemConfigHandler: systemConfigHandler,
 		auditLogger:         auditLogger,
 		auditHandler:        auditHandler,
@@ -238,9 +269,42 @@ func initDependencies(
 	}, nil
 }
 
+func startBackgroundWorkers(ctx context.Context, appRoleService *approle.Service, logger *zap.Logger) {
+	if appRoleService != nil {
+		go runExpiredAppRoleCleanupWorker(ctx, appRoleService, logger)
+	}
+}
+
+func runExpiredAppRoleCleanupWorker(ctx context.Context, svc *approle.Service, logger *zap.Logger) {
+	runCleanup := func() {
+		rowsAffected, err := svc.CleanExpiredRoles(context.Background())
+		if err != nil {
+			logger.Error("清理过期应用角色失败", zap.Error(err))
+			return
+		}
+		if rowsAffected > 0 {
+			logger.Info("已清理过期应用角色", zap.Int64("rows_affected", rowsAffected))
+		}
+	}
+
+	runCleanup()
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			runCleanup()
+		}
+	}
+}
+
 func autoMigrate(
 	tenantRepo *tenant.Repository,
 	authRepo *auth.Repository,
+	appRoleRepo *approle.Repository,
 	employeeRepo *employee.Repository,
 	groupRepo *group.Repository,
 	shiftRepo *shift.Repository,
@@ -258,6 +322,7 @@ func autoMigrate(
 	}{
 		{name: "tenant", fn: tenantRepo.AutoMigrate},
 		{name: "auth", fn: authRepo.AutoMigrate},
+		{name: "app_role", fn: appRoleRepo.AutoMigrate},
 		{name: "employee", fn: employeeRepo.AutoMigrate},
 		{name: "group", fn: groupRepo.AutoMigrate},
 		{name: "shift", fn: shiftRepo.AutoMigrate},
@@ -286,6 +351,7 @@ func registerRoutes(srv *appserver.Server, deps *appDependencies) {
 
 	srv.Router.Route("/api/v1", func(r chi.Router) {
 		auth.RegisterPublicRoutes(r, deps.authHandler)
+		auth.RegisterAppPublicRoutes(r, deps.appAuthHandler)
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.AuthMiddleware(deps.jwtManager))
@@ -293,12 +359,13 @@ func registerRoutes(srv *appserver.Server, deps *appDependencies) {
 			r.Use(audit.Middleware(deps.auditLogger))
 
 			auth.RegisterProtectedRoutes(r, deps.authHandler)
+			approle.RegisterUserRoutes(r, deps.appRoleHandler)
 			employee.RegisterRoutes(r, deps.employeeHandler)
 			group.RegisterRoutes(r, deps.groupHandler)
 			shift.RegisterRoutes(r, deps.shiftHandler)
-			leave.RegisterRoutes(r, deps.leaveHandler)
+			leave.RegisterRoutes(r, deps.leaveHandler, deps.appRoleService)
 			rule.RegisterRoutes(r, deps.ruleHandler)
-			schedule.RegisterRoutes(r, deps.scheduleHandler)
+			schedule.RegisterRoutes(r, deps.scheduleHandler, deps.appRoleService)
 			if deps.aiHandler != nil {
 				aiapi.RegisterRoutes(r, deps.aiHandler)
 			}
@@ -311,10 +378,38 @@ func registerRoutes(srv *appserver.Server, deps *appDependencies) {
 			r.Group(func(r chi.Router) {
 				r.Use(auth.RequirePermission("platform:admin"))
 				auth.RegisterAdminRoutes(r, deps.authHandler)
-				admin.RegisterRoutes(r, deps.dashboardHandler, deps.systemConfigHandler)
+				admin.RegisterRoutes(r, deps.dashboardHandler, deps.systemConfigHandler, deps.organizationHandler)
 				subscription.RegisterRoutes(r, deps.subscriptionHandler)
 				audit.RegisterRoutes(r, deps.auditHandler)
 			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(auth.RequirePermission("platform:user:manage"))
+				admin.RegisterPlatformUserRoutes(r, deps.platformUserHandler)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(auth.RequirePermission("platform:manage_scope"))
+				approle.RegisterPlatformRoutes(r, deps.appRoleHandler)
+				employee.RegisterPlatformRoutes(r, deps.employeeHandler)
+				group.RegisterPlatformRoutes(r, deps.groupHandler)
+				shift.RegisterPlatformRoutes(r, deps.shiftHandler)
+				rule.RegisterPlatformRoutes(r, deps.ruleHandler)
+			})
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(auth.AuthMiddleware(deps.appJWTManager))
+			r.Use(tenant.Middleware())
+			r.Use(audit.Middleware(deps.auditLogger))
+
+			auth.RegisterAppProtectedRoutes(r, deps.appAuthHandler)
+			schedule.RegisterAppRoutes(r, deps.scheduleHandler, deps.appRoleService)
+			approle.RegisterAppRoutes(r, deps.appRoleHandler)
+			employee.RegisterAppRefRoutes(r, deps.employeeHandler)
+			group.RegisterAppRefRoutes(r, deps.groupHandler)
+			shift.RegisterAppRefRoutes(r, deps.shiftHandler)
+			rule.RegisterAppRefRoutes(r, deps.ruleHandler)
 		})
 	})
 }

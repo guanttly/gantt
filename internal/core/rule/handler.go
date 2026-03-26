@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 
+	"gantt-saas/internal/auth"
 	"gantt-saas/internal/common/response"
 
 	"github.com/go-chi/chi/v5"
@@ -13,6 +14,10 @@ import (
 // Handler 规则 HTTP 处理器。
 type Handler struct {
 	svc *Service
+}
+
+type disableRuleInput struct {
+	Reason string `json:"reason"`
 }
 
 // NewHandler 创建规则处理器。
@@ -90,6 +95,40 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, rl)
 }
 
+// DisableInherited 禁用上级继承规则。
+// PUT /api/v1/rules/:id/disable
+func (h *Handler) DisableInherited(w http.ResponseWriter, r *http.Request) {
+	var input disableRuleInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		response.BadRequest(w, "请求参数格式错误")
+		return
+	}
+
+	actorUserID := ""
+	if claims := auth.GetClaims(r.Context()); claims != nil {
+		actorUserID = claims.UserID
+	}
+
+	rl, err := h.svc.DisableInherited(r.Context(), chi.URLParam(r, "id"), input.Reason, actorUserID)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.OK(w, rl)
+}
+
+// RestoreInheritance 恢复继承规则。
+// PUT /api/v1/rules/:id/restore
+func (h *Handler) RestoreInheritance(w http.ResponseWriter, r *http.Request) {
+	if err := h.svc.RestoreInheritance(r.Context(), chi.URLParam(r, "id")); err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.OK(w, map[string]string{"status": "restored"})
+}
+
 // Delete 删除规则。
 // DELETE /api/v1/rules/:id
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -140,6 +179,16 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		response.NotFound(w, err.Error())
 	case errors.Is(err, ErrCannotOverride):
 		response.BadRequest(w, err.Error())
+	case errors.Is(err, ErrInvalidDisableReason):
+		response.BadRequest(w, err.Error())
+	case errors.Is(err, ErrCannotDisable):
+		response.BadRequest(w, err.Error())
+	case errors.Is(err, ErrRuleAlreadyDisabled):
+		response.Conflict(w, err.Error())
+	case errors.Is(err, ErrRuleAlreadyOverridden):
+		response.Conflict(w, err.Error())
+	case errors.Is(err, ErrNothingToRestore):
+		response.NotFound(w, err.Error())
 	default:
 		response.InternalError(w, "内部错误")
 	}

@@ -18,7 +18,7 @@ export function useOrgNode() {
   const isDeptAdmin = computed(() => auth.hasRole('dept_admin'))
 
   /** 是否是排班员 */
-  const isScheduler = computed(() => auth.hasRole('scheduler'))
+  const isScheduler = computed(() => auth.hasAnyPermission(['schedule:create', 'schedule:execute', 'schedule:adjust', 'schedule:publish']))
 
   return {
     currentNodeId,

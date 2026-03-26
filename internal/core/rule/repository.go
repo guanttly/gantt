@@ -39,6 +39,18 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*Rule, error) {
 	return &rule, nil
 }
 
+// GetByIDAnyScope 根据 ID 查询规则，跳过租户范围限制。
+func (r *Repository) GetByIDAnyScope(ctx context.Context, id string) (*Rule, error) {
+	var rule Rule
+	err := r.db.WithContext(tenant.SkipTenantGuard(ctx)).
+		Where("id = ?", id).
+		First(&rule).Error
+	if err != nil {
+		return nil, err
+	}
+	return &rule, nil
+}
+
 // Update 更新规则。
 func (r *Repository) Update(ctx context.Context, rule *Rule) error {
 	return tenant.ApplyScope(ctx, r.db.WithContext(ctx)).Save(rule).Error
@@ -85,6 +97,28 @@ func (r *Repository) GetByOverrideRuleID(ctx context.Context, overrideRuleID str
 	var rules []Rule
 	err := r.db.WithContext(ctx).
 		Where("override_rule_id = ?", overrideRuleID).
+		Find(&rules).Error
+	return rules, err
+}
+
+// GetByNodeAndOverrideRuleID 查询某节点下对指定上级规则的本级覆盖或禁用记录。
+func (r *Repository) GetByNodeAndOverrideRuleID(ctx context.Context, nodeID, overrideRuleID string) (*Rule, error) {
+	var rule Rule
+	err := r.db.WithContext(tenant.SkipTenantGuard(ctx)).
+		Where("org_node_id = ? AND override_rule_id = ?", nodeID, overrideRuleID).
+		First(&rule).Error
+	if err != nil {
+		return nil, err
+	}
+	return &rule, nil
+}
+
+// ListDisabledByNodeID 查询某节点创建的禁用继承标记。
+func (r *Repository) ListDisabledByNodeID(ctx context.Context, nodeID string) ([]Rule, error) {
+	var rules []Rule
+	err := r.db.WithContext(tenant.SkipTenantGuard(ctx)).
+		Where("org_node_id = ? AND disabled = ?", nodeID, true).
+		Order("category ASC, priority ASC, created_at ASC").
 		Find(&rules).Error
 	return rules, err
 }

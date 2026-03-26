@@ -3,8 +3,6 @@ import { Download } from '@element-plus/icons-vue'
 import { ElButton, ElDialog, ElEmpty, ElTabPane, ElTabs, ElTag } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 
-import { exportScheduleByPersonToExcel } from './exportScheduleByPerson'
-
 interface StaffFlag {
   isAdded?: boolean
   isRemoved?: boolean
@@ -53,6 +51,7 @@ const emit = defineEmits<{
 }>()
 
 const activeTab = ref<string>('')
+const exportLoading = ref(false)
 
 const WEEKDAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
@@ -95,9 +94,10 @@ const shiftTableData = computed(() => {
   return result
 })
 
-function handleExport() {
+async function handleExport() {
   if (!props.data)
     return
+  exportLoading.value = true
   const shiftsRecord: Record<string, { shiftId: string, priority: number, days: Record<string, DayShift> }> = {}
   const shiftInfoList: Array<{ id: string, name: string, startTime?: string, endTime?: string }> = []
   for (const s of props.data.shifts) {
@@ -113,12 +113,18 @@ function handleExport() {
       endTime: s.endTime,
     })
   }
-  exportScheduleByPersonToExcel({
-    shifts: shiftsRecord,
-    shiftInfoList,
-    startDate: props.data.shifts[0]?.startDate ?? '',
-    endDate: props.data.shifts[0]?.endDate ?? '',
-  })
+  try {
+    const { exportScheduleByPersonToExcel } = await import('./exportScheduleByPerson')
+    exportScheduleByPersonToExcel({
+      shifts: shiftsRecord,
+      shiftInfoList,
+      startDate: props.data.shifts[0]?.startDate ?? '',
+      endDate: props.data.shifts[0]?.endDate ?? '',
+    })
+  }
+  finally {
+    exportLoading.value = false
+  }
 }
 
 function handleClose() {
@@ -139,7 +145,7 @@ function handleClose() {
   >
     <div v-if="data && data.shifts && data.shifts.length > 0" class="multi-shift-content">
       <div class="toolbar">
-        <ElButton :icon="Download" type="primary" @click="handleExport">
+        <ElButton :icon="Download" :loading="exportLoading" type="primary" @click="handleExport">
           导出 Excel
         </ElButton>
       </div>

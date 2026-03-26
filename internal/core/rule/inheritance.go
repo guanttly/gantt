@@ -109,6 +109,10 @@ func mergeRules(rules []Rule, depthMap map[string]int) []Rule {
 		if overriddenIDs[r.ID] {
 			continue
 		}
+		// 禁用标记仅用于从生效集中移除规则，不自身进入结果。
+		if r.Disabled {
+			continue
+		}
 		// 如果是覆盖规则，直接保留
 		if r.OverrideRuleID != nil && *r.OverrideRuleID != "" {
 			standalone = append(standalone, r)

@@ -3,6 +3,7 @@ import type { ListParams, PaginatedResponse } from '@/types/api'
 import type {
   AdjustAssignmentRequest,
   CreateScheduleRequest,
+  MyScheduleAssignment,
   ScheduleAssignment,
   ScheduleChange,
   SchedulePlan,
@@ -15,6 +16,7 @@ import client from './client'
 export type {
   AdjustAssignmentRequest,
   CreateScheduleRequest,
+  MyScheduleAssignment,
   ScheduleAssignment,
   ScheduleChange,
   SchedulePlan,
@@ -101,6 +103,11 @@ export function getScheduleByDateRange(params: { start_date: string, end_date: s
 /** 查询员工排班 */
 export function getEmployeeSchedule(params: { employee_id: string, start_date: string, end_date: string }) {
   return client.get<ScheduleAssignment[]>('/scheduling/assignments/employee', { params }).then(r => r.data)
+}
+
+/** 查询当前登录员工的已发布排班 */
+export function getMySchedule(params: { start_date: string, end_date: string }) {
+  return client.get<MyScheduleAssignment[]>('/scheduling/assignments/self', { params }).then(r => r.data)
 }
 
 /** 删除排班分配 */

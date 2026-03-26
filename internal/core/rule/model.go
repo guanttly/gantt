@@ -42,6 +42,10 @@ type Rule struct {
 	Config         json.RawMessage `gorm:"type:json;not null" json:"config"`
 	Priority       int             `gorm:"not null;default:0" json:"priority"`
 	IsEnabled      bool            `gorm:"not null;default:true" json:"is_enabled"`
+	Disabled       bool            `gorm:"not null;default:false;index:idx_rule_disabled" json:"disabled"`
+	DisabledBy     *string         `gorm:"size:64" json:"disabled_by,omitempty"`
+	DisabledAt     *time.Time      `json:"disabled_at,omitempty"`
+	DisabledReason *string         `gorm:"type:text" json:"disabled_reason,omitempty"`
 	OverrideRuleID *string         `gorm:"size:64" json:"override_rule_id,omitempty"`
 	Description    *string         `gorm:"size:512" json:"description,omitempty"`
 	CreatedAt      time.Time       `gorm:"autoCreateTime" json:"created_at"`

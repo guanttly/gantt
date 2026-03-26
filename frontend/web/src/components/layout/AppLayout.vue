@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { Calendar, ChatDotRound, Clock, Collection, Document, OfficeBuilding, Setting, User } from '@element-plus/icons-vue'
+import { Calendar, ChatDotRound, User } from '@element-plus/icons-vue'
 import { computed, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import OrgNodeSelector from '@/components/common/OrgNodeSelector.vue'
@@ -13,11 +13,6 @@ const auth = useAuthStore()
 // 图标映射
 const iconMap: Record<string, any> = {
   'calendar': markRaw(Calendar),
-  'clock': markRaw(Clock),
-  'collection': markRaw(Collection),
-  'document': markRaw(Document),
-  'office-building': markRaw(OfficeBuilding),
-  'setting': markRaw(Setting),
   'user': markRaw(User),
   'chat-dot-round': markRaw(ChatDotRound),
 }
@@ -30,6 +25,8 @@ interface NavItem {
   icon?: string
   children?: NavItem[]
   requiredRole?: string
+  requiredPermission?: string
+  requiredAnyPermissions?: string[]
   dividerAfter?: boolean
 }
 
@@ -38,22 +35,20 @@ const navGroups: NavItem[] = [
     path: '/scheduling',
     label: '排班工作台',
     icon: 'calendar',
+    requiredAnyPermissions: ['schedule:view:node', 'schedule:view:all', 'schedule:view:self'],
     children: [
-      { path: '/scheduling', label: '排班列表' },
-      { path: '/scheduling/create', label: '创建排班' },
+      { path: '/scheduling/mine', label: '我的排班', requiredPermission: 'schedule:view:self' },
+      { path: '/scheduling', label: '排班列表', requiredAnyPermissions: ['schedule:view:node', 'schedule:view:all'] },
+      { path: '/scheduling/create', label: '创建排班', requiredPermission: 'schedule:create' },
+      { path: '/scheduling/workspace', label: '排班执行', requiredPermission: 'schedule:execute' },
     ],
   },
   {
-    path: '/employees',
-    label: '数据管理',
+    path: '/leaves',
+    label: '请假管理',
     icon: 'user',
     children: [
-      { path: '/employees', label: '员工管理', icon: 'user' },
-      { path: '/shifts', label: '班次管理', icon: 'clock' },
-      { path: '/groups', label: '分组管理', icon: 'collection' },
-      { path: '/rules', label: '排班规则', icon: 'document' },
-      { path: '/leaves', label: '请假管理', icon: 'calendar', dividerAfter: true },
-      { path: '/org', label: '组织管理', icon: 'office-building', requiredRole: 'org_admin' },
+      { path: '/leaves', label: '请假管理', icon: 'calendar' },
     ],
   },
   {
@@ -67,10 +62,10 @@ const navGroups: NavItem[] = [
 
 const activeTopPath = computed(() => {
   const p = route.path
-  if (p.startsWith('/scheduling'))
+  if (p.startsWith('/scheduling') && auth.hasAnyPermission(['schedule:view:node', 'schedule:view:all', 'schedule:view:self']))
     return '/scheduling'
-  if (p.startsWith('/employees') || p.startsWith('/shifts') || p.startsWith('/groups') || p.startsWith('/rules') || p.startsWith('/leaves') || p.startsWith('/org'))
-    return '/employees'
+  if (p.startsWith('/leaves'))
+    return '/leaves'
   if (p.startsWith('/ai'))
     return '/ai/chat'
   return '/dashboard'
@@ -79,10 +74,28 @@ const activeTopPath = computed(() => {
 const currentSubMenus = computed(() => {
   const group = navGroups.find(g => g.path === activeTopPath.value)
   if (group?.children)
-    return group.children.filter(c => !c.requiredRole || auth.hasRole(c.requiredRole as any))
+    return group.children.filter((c) => {
+      if (c.requiredRole && !auth.hasRole(c.requiredRole as any))
+        return false
+      if (c.requiredAnyPermissions && !auth.hasAnyPermission(c.requiredAnyPermissions))
+        return false
+      if (c.requiredPermission && !auth.hasPermission(c.requiredPermission))
+        return false
+      return true
+    })
 
   return []
 })
+
+const visibleNavGroups = computed(() => navGroups.filter((group) => {
+  if (group.requiredRole && !auth.hasRole(group.requiredRole as any))
+    return false
+  if (group.requiredAnyPermissions && !auth.hasAnyPermission(group.requiredAnyPermissions))
+    return false
+  if (group.requiredPermission && !auth.hasPermission(group.requiredPermission))
+    return false
+  return true
+}))
 
 const showSubNav = computed(() => currentSubMenus.value.length > 0)
 
@@ -116,7 +129,7 @@ async function handleLogout() {
         <!-- 主导航 -->
         <nav class="nav-menu">
           <div
-            v-for="item in navGroups"
+            v-for="item in visibleNavGroups"
             :key="item.path"
             class="nav-item"
             :class="{ active: activeTopPath === item.path }"

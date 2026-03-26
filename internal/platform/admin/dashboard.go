@@ -40,12 +40,12 @@ func (h *DashboardHandler) GetDashboard(w http.ResponseWriter, r *http.Request) 
 		SubscriptionBreakdown: make(map[string]int64),
 	}
 
-	h.db.WithContext(ctx).Table("org_nodes").Where("parent_id IS NULL").Count(&data.TotalOrgs)
-	h.db.WithContext(ctx).Table("org_nodes").Where("parent_id IS NULL AND status = ?", "active").Count(&data.ActiveOrgs)
-	h.db.WithContext(ctx).Table("users").Count(&data.TotalUsers)
+	h.db.WithContext(ctx).Table("org_nodes").Where("parent_id IS NULL AND code <> ?", "platform-root").Count(&data.TotalOrgs)
+	h.db.WithContext(ctx).Table("org_nodes").Where("parent_id IS NULL AND code <> ? AND status = ?", "platform-root", "active").Count(&data.ActiveOrgs)
+	h.db.WithContext(ctx).Table("platform_users").Count(&data.TotalUsers)
 
 	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
-	h.db.WithContext(ctx).Table("users").Where("updated_at >= ?", thirtyDaysAgo).Count(&data.ActiveUsers30d)
+	h.db.WithContext(ctx).Table("platform_users").Where("updated_at >= ?", thirtyDaysAgo).Count(&data.ActiveUsers30d)
 	h.countSchedules30d(ctx, thirtyDaysAgo, &data.SchedulesGenerated30d)
 	h.countSubscriptionBreakdown(ctx, data.SubscriptionBreakdown)
 

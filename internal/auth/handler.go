@@ -237,6 +237,8 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		response.Conflict(w, err.Error())
 	case errors.Is(err, ErrNodeRoleExists):
 		response.Conflict(w, err.Error())
+	case errors.Is(err, ErrPublicRegisterRole):
+		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrWeakPassword):
 		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrRoleNotFound):

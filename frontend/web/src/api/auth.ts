@@ -1,6 +1,8 @@
 import type { StatusResponse } from '@/types/api'
 // 认证相关 API
 import type {
+  AppPermissionsResponse,
+  AppRolesResponse,
   AssignRoleRequest,
   ForceResetPasswordRequest,
   LoginRequest,
@@ -45,6 +47,16 @@ export function forceResetPassword(data: ForceResetPasswordRequest) {
 /** 获取当前用户信息（需认证） */
 export function getMe() {
   return client.get<UserInfoResponse>('/auth/me').then(r => r.data)
+}
+
+/** 获取当前登录用户的应用角色 */
+export function getMyAppRoles() {
+  return client.get<AppRolesResponse>('/auth/app-roles').then(r => r.data)
+}
+
+/** 获取当前登录用户的应用权限 */
+export function getMyAppPermissions() {
+  return client.get<AppPermissionsResponse>('/auth/app-permissions').then(r => r.data)
 }
 
 /** 分配角色（需管理员权限） */

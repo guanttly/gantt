@@ -1,26 +1,35 @@
 <script setup lang="ts">
-import { BarChartOutline, BusinessOutline, DocumentTextOutline, LogOutOutline, PersonCircleOutline, ReceiptOutline, SettingsOutline } from '@vicons/ionicons5'
+import { BarChartOutline, BusinessOutline, DocumentTextOutline, ListOutline, LogOutOutline, PeopleOutline, PersonCircleOutline, PersonOutline, ReceiptOutline, SettingsOutline, ShieldCheckmarkOutline, TimeOutline } from '@vicons/ionicons5'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NButton, NIcon } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
+import { RoleName } from '@/types/auth'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
 const menuItems = [
-  { path: '/dashboard', label: '运营看板', icon: BarChartOutline },
-  { path: '/orgs', label: '机构管理', icon: BusinessOutline },
-  { path: '/subscriptions', label: '订阅管理', icon: ReceiptOutline },
-  { path: '/audit', label: '审计日志', icon: DocumentTextOutline },
-  { path: '/config', label: '系统配置', icon: SettingsOutline },
+  { path: '/dashboard', label: '运营看板', icon: BarChartOutline, requiredRole: RoleName.PlatformAdmin },
+  { path: '/orgs', label: '机构管理', icon: BusinessOutline, requiredRole: RoleName.PlatformAdmin },
+  { path: '/employees', label: '员工管理', icon: PeopleOutline, requiredRole: RoleName.DeptAdmin },
+  { path: '/groups', label: '分组管理', icon: ListOutline, requiredRole: RoleName.DeptAdmin },
+  { path: '/shifts', label: '班次管理', icon: TimeOutline, requiredRole: RoleName.DeptAdmin },
+  { path: '/rules', label: '规则管理', icon: DocumentTextOutline, requiredRole: RoleName.DeptAdmin },
+  { path: '/platform-users', label: '平台账号', icon: PersonOutline, requiredRole: RoleName.OrgAdmin },
+  { path: '/app-permissions', label: '应用权限', icon: ShieldCheckmarkOutline, requiredRole: RoleName.DeptAdmin },
+  { path: '/subscriptions', label: '订阅管理', icon: ReceiptOutline, requiredRole: RoleName.PlatformAdmin },
+  { path: '/audit', label: '审计日志', icon: DocumentTextOutline, requiredRole: RoleName.PlatformAdmin },
+  { path: '/config', label: '系统配置', icon: SettingsOutline, requiredRole: RoleName.PlatformAdmin },
 ]
+
+const visibleMenuItems = computed(() => menuItems.filter(item => auth.hasRole(item.requiredRole)))
 
 const activePath = computed(() => {
   const p = route.path
-  const match = menuItems.find(m => p.startsWith(m.path))
-  return match?.path ?? '/dashboard'
+  const match = visibleMenuItems.value.find(m => p.startsWith(m.path))
+  return match?.path ?? visibleMenuItems.value[0]?.path ?? '/employees'
 })
 
 function handleMenuClick(path: string) {
@@ -43,7 +52,7 @@ async function handleLogout() {
       </div>
       <nav class="sidebar-menu">
         <div
-          v-for="item in menuItems"
+          v-for="item in visibleMenuItems"
           :key="item.path"
           class="menu-item"
           :class="{ active: activePath === item.path }"
@@ -75,10 +84,7 @@ async function handleLogout() {
 
     <div class="content-area">
       <header class="content-header">
-        <div>
-          <p class="content-eyebrow">平台工作台</p>
-          <h1 class="content-heading">{{ menuItems.find(item => item.path === activePath)?.label || '平台管理' }}</h1>
-        </div>
+        <h1 class="content-heading">{{ visibleMenuItems.find(item => item.path === activePath)?.label || '平台管理' }}</h1>
       </header>
       <main class="main-content">
         <router-view />
@@ -140,6 +146,29 @@ async function handleLogout() {
   flex: 1;
   padding: 10px 6px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.42) transparent;
+}
+
+.sidebar-menu::-webkit-scrollbar {
+  width: 10px;
+}
+
+.sidebar-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-menu::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.5), rgba(94, 234, 212, 0.28));
+  background-clip: content-box;
+}
+
+.sidebar-menu::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(226, 232, 240, 0.62), rgba(94, 234, 212, 0.42));
+  background-clip: content-box;
 }
 
 .menu-item {

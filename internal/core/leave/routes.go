@@ -1,16 +1,18 @@
 package leave
 
 import (
-"github.com/go-chi/chi/v5"
+	"gantt-saas/internal/core/approle"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // RegisterRoutes 注册请假管理路由到 /api/v1/leaves。
-func RegisterRoutes(r chi.Router, h *Handler) {
-r.Route("/leaves", func(r chi.Router) {
-r.Get("/", h.List)
-r.Post("/", h.Create)
-r.Put("/{id}", h.Update)
-r.Delete("/{id}", h.Delete)
-r.Put("/{id}/approve", h.Approve)
-})
+func RegisterRoutes(r chi.Router, h *Handler, appRoleSvc *approle.Service) {
+	r.Route("/leaves", func(r chi.Router) {
+		r.With(approle.RequireAnyPermission(appRoleSvc, "leave:create:self", "leave:view:node", "leave:approve")).Get("/", h.List)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "leave:create:self")).Post("/", h.Create)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "leave:create:self")).Put("/{id}", h.Update)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "leave:create:self")).Delete("/{id}", h.Delete)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "leave:approve")).Put("/{id}/approve", h.Approve)
+	})
 }

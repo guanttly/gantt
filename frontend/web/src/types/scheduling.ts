@@ -37,6 +37,21 @@ export interface ScheduleAssignment {
   }
 }
 
+export interface MyScheduleAssignment {
+  id: string
+  schedule_id: string
+  schedule_name: string
+  employee_id: string
+  shift_id: string
+  shift_name: string
+  shift_color: string
+  date: string
+  start_time: string
+  end_time: string
+  source: string
+  status: string
+}
+
 export interface CreateScheduleRequest {
   name: string
   start_date: string

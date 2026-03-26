@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
-import ChatAssistant from './components/ChatAssistant/index.vue'
-import SchedulingGantt from './components/SchedulingGantt.vue'
+import { defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue'
 import SchedulingProgressBar from './components/SchedulingProgressBar.vue'
 import SchedulingToolbar from './components/SchedulingToolbar.vue'
+
+const ChatAssistant = defineAsyncComponent(() => import('./components/ChatAssistant/index.vue'))
+const SchedulingGantt = defineAsyncComponent(() => import('./components/SchedulingGantt.vue'))
 
 // 侧边栏状态
 const showChatPanel = ref(false)
 const chatAssistantRef = ref()
 const ganttRef = ref()
+const hasOpenedChatPanel = ref(false)
+const pendingQuickStart = ref<{ startDate: string, endDate: string } | null>(null)
 
 // 日期范围 — 默认本周
 function formatDateLocal(date: Date): string {
@@ -36,29 +39,42 @@ function handleRefresh() {
 }
 
 function toggleChatPanel() {
+  if (!showChatPanel.value)
+    hasOpenedChatPanel.value = true
   showChatPanel.value = !showChatPanel.value
 }
 
 function handleQuickStart() {
+  hasOpenedChatPanel.value = true
   if (!showChatPanel.value) {
     showChatPanel.value = true
   }
 
-  nextTick(() => {
-    if (chatAssistantRef.value?.startScheduleCreationWorkflow) {
-      const daysUntilNextMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek)
-      const nextMonday = new Date(today)
-      nextMonday.setDate(today.getDate() + daysUntilNextMonday)
-      const nextSunday = new Date(nextMonday)
-      nextSunday.setDate(nextMonday.getDate() + 6)
+  const daysUntilNextMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek)
+  const nextMonday = new Date(today)
+  nextMonday.setDate(today.getDate() + daysUntilNextMonday)
+  const nextSunday = new Date(nextMonday)
+  nextSunday.setDate(nextMonday.getDate() + 6)
 
-      chatAssistantRef.value.startScheduleCreationWorkflow({
-        startDate: formatDateLocal(nextMonday),
-        endDate: formatDateLocal(nextSunday),
-      })
+  pendingQuickStart.value = {
+    startDate: formatDateLocal(nextMonday),
+    endDate: formatDateLocal(nextSunday),
+  }
+
+  nextTick(() => {
+    if (chatAssistantRef.value?.startScheduleCreationWorkflow && pendingQuickStart.value) {
+      chatAssistantRef.value.startScheduleCreationWorkflow(pendingQuickStart.value)
+      pendingQuickStart.value = null
     }
   })
 }
+
+watch(chatAssistantRef, (instance) => {
+  if (instance?.startScheduleCreationWorkflow && pendingQuickStart.value) {
+    instance.startScheduleCreationWorkflow(pendingQuickStart.value)
+    pendingQuickStart.value = null
+  }
+})
 
 onMounted(() => {
   // 页面初始化
@@ -85,7 +101,7 @@ onMounted(() => {
 
       <!-- 智能排班助手侧边栏 -->
       <transition name="slide">
-        <div v-show="showChatPanel" class="scheduling-aside">
+        <div v-if="hasOpenedChatPanel" v-show="showChatPanel" class="scheduling-aside">
           <ChatAssistant ref="chatAssistantRef" @close="toggleChatPanel" />
         </div>
       </transition>

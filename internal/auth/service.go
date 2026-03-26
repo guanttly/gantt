@@ -22,6 +22,7 @@ var (
 	ErrInvalidCredentials  = errors.New("用户名或密码错误")
 	ErrUsernameExists      = errors.New("用户名已存在")
 	ErrEmailExists         = errors.New("邮箱已存在")
+	ErrPublicRegisterRole  = errors.New("公开注册仅允许创建 employee 角色")
 	ErrWeakPassword        = errors.New("密码强度不足：至少 8 位，需包含大写、小写和数字")
 	ErrNoNodePermission    = errors.New("用户无该组织节点的访问权限")
 	ErrAccountLocked       = errors.New("账户已锁定，请 15 分钟后再试")
@@ -137,6 +138,11 @@ func NewService(repo *Repository, tenantRepo *tenant.Repository, jwt *JWTManager
 
 // Register 用户注册。
 func (s *Service) Register(ctx context.Context, input RegisterInput) (*LoginResponse, error) {
+	requestedRoleName := input.RoleName
+	if requestedRoleName != "" && requestedRoleName != string(RoleEmployee) {
+		return nil, ErrPublicRegisterRole
+	}
+
 	// 校验密码强度
 	if !isStrongPassword(input.Password) {
 		return nil, ErrWeakPassword
@@ -175,9 +181,16 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (*LoginResp
 		return nil, fmt.Errorf("创建用户失败: %w", err)
 	}
 
-	// 如果指定了 org_node_id 和 role_name，创建关联
-	if input.OrgNodeID != "" && input.RoleName != "" {
-		if err := s.assignRoleInternal(ctx, user.ID, input.OrgNodeID, input.RoleName); err != nil {
+	// 公开注册仅允许落到最低权限 employee 角色。
+	if input.OrgNodeID != "" {
+		if _, err := s.tenantRepo.GetByID(ctx, input.OrgNodeID); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, ErrNoNodePermission
+			}
+			return nil, fmt.Errorf("查询组织节点失败: %w", err)
+		}
+
+		if err := s.assignRoleInternal(ctx, user.ID, input.OrgNodeID, string(RoleEmployee)); err != nil {
 			return nil, fmt.Errorf("分配角色失败: %w", err)
 		}
 

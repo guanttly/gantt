@@ -53,7 +53,7 @@ func ApplyScope(ctx context.Context, db *gorm.DB) *gorm.DB {
 // platformTables 平台级表白名单，不需要 org_node_id 条件。
 var platformTables = map[string]bool{
 	"org_nodes":        true,
-	"users":            true,
+	"platform_users":   true,
 	"user_node_roles":  true,
 	"ai_model_configs": true,
 	"subscriptions":    true,

@@ -11,7 +11,7 @@ defineProps<{
 }>()
 
 // 使用 Vite 的 import.meta.glob 动态导入 SVG 资源
-const svgModules = import.meta.glob('../assets/icons/svg/*.svg', { eager: true, as: 'url' })
+const svgModules = import.meta.glob('../assets/icons/svg/*.svg', { eager: true, query: '?url', import: 'default' })
 
 function getIconUrl(iconName: string): string {
   const key = `../assets/icons/svg/${iconName}.svg`

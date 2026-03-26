@@ -14,18 +14,19 @@ const (
 
 // User 用户账户模型。
 type User struct {
-	ID           string    `gorm:"primaryKey;size:64" json:"id"`
-	Username     string    `gorm:"size:64;not null;uniqueIndex:uk_username" json:"username"`
-	Email        string    `gorm:"size:128;not null;uniqueIndex:uk_email" json:"email"`
-	Phone        *string   `gorm:"size:20;index:idx_phone" json:"phone,omitempty"`
-	PasswordHash string    `gorm:"size:256;not null" json:"-"`
-	Status       string    `gorm:"size:16;not null;default:active" json:"status"`
-	MustResetPwd bool      `gorm:"not null;default:false" json:"must_reset_pwd"`
-	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	ID              string    `gorm:"primaryKey;size:64" json:"id"`
+	Username        string    `gorm:"size:64;not null;uniqueIndex:uk_username" json:"username"`
+	Email           string    `gorm:"size:128;not null;uniqueIndex:uk_email" json:"email"`
+	Phone           *string   `gorm:"size:20;index:idx_phone" json:"phone,omitempty"`
+	PasswordHash    string    `gorm:"size:256;not null" json:"-"`
+	Status          string    `gorm:"size:16;not null;default:active" json:"status"`
+	MustResetPwd    bool      `gorm:"not null;default:false" json:"must_reset_pwd"`
+	BoundEmployeeID *string   `gorm:"size:64;index:idx_bound_employee" json:"bound_employee_id,omitempty"`
+	CreatedAt       time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt       time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
-func (User) TableName() string { return "users" }
+func (User) TableName() string { return "platform_users" }
 
 // Role 角色模型。
 type Role struct {

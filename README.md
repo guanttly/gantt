@@ -191,7 +191,6 @@ Rostering Agent (编排层)
 | Element Plus | 2.8.3 | UI 组件库 |
 | Vue Router | 4.5.1 | 路由管理 |
 | Pinia | 3.0.3 | 状态管理 |
-| ECharts | 6.0.0 | 数据可视化 |
 | Vis-Timeline | 8.3.1 | 甘特图组件 |
 | Vite | 5.4.14 | 构建工具 |
 

@@ -50,6 +50,20 @@ export function setupGuards(router: Router) {
       }
     }
 
+    if (to.meta.requiredPermission) {
+      const requiredPermission = to.meta.requiredPermission as string
+      if (!auth.hasPermission(requiredPermission)) {
+        return next('/403')
+      }
+    }
+
+    if (to.meta.requiredAnyPermissions) {
+      const requiredPermissions = to.meta.requiredAnyPermissions as string[]
+      if (!auth.hasAnyPermission(requiredPermissions)) {
+        return next('/403')
+      }
+    }
+
     next()
   })
 }

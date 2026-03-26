@@ -249,6 +249,17 @@ func (s *Service) GetAssignments(ctx context.Context, scheduleID string) ([]Assi
 	return s.repo.ListAssignmentsBySchedule(ctx, scheduleID)
 }
 
+// GetSelfAssignments 查询当前员工在日期范围内的已发布排班。
+func (s *Service) GetSelfAssignments(ctx context.Context, employeeID, startDate, endDate string) ([]SelfAssignmentView, error) {
+	if employeeID == "" {
+		return nil, ErrAssignmentNotFound
+	}
+	if startDate == "" || endDate == "" || startDate > endDate {
+		return nil, ErrInvalidDateRange
+	}
+	return s.repo.ListSelfAssignments(ctx, employeeID, startDate, endDate)
+}
+
 // AdjustAssignments 手动调整排班（触发调整 Pipeline）。
 func (s *Service) AdjustAssignments(ctx context.Context, scheduleID string, input step.EditInput) (*GenerateResult, error) {
 	sch, err := s.repo.GetScheduleByID(ctx, scheduleID)

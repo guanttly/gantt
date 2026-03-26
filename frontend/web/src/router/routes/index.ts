@@ -24,52 +24,33 @@ export const RootRoute: RouteRecordRaw[] = [{
       path: 'scheduling',
       name: 'ScheduleList',
       component: () => import('@/views/scheduling/ScheduleList.vue'),
-      meta: { title: () => '排班列表', icon: 'calendar' },
+      meta: { title: () => '排班列表', icon: 'calendar', requiredAnyPermissions: ['schedule:view:node', 'schedule:view:all'] },
+    },
+    {
+      path: 'scheduling/mine',
+      name: 'MySchedule',
+      component: () => import('@/views/scheduling/MySchedule.vue'),
+      meta: { title: () => '我的排班', icon: 'calendar', requiredPermission: 'schedule:view:self' },
     },
     {
       path: 'scheduling/workspace',
       name: 'SchedulingWorkspace',
       component: () => import('@/views/scheduling/SchedulingWorkspace.vue'),
-      meta: { title: () => '排班工作台', requiredRole: 'scheduler' },
+      meta: { title: () => '排班工作台', requiredPermission: 'schedule:execute' },
     },
     {
       path: 'scheduling/create',
       name: 'ScheduleCreate',
       component: () => import('@/views/scheduling/ScheduleCreate.vue'),
-      meta: { title: () => '创建排班', requiredRole: 'scheduler', hideMenu: true },
+      meta: { title: () => '创建排班', requiredPermission: 'schedule:create', hideMenu: true },
     },
     {
       path: 'scheduling/:id',
       name: 'ScheduleDetail',
       component: () => import('@/views/scheduling/ScheduleDetail.vue'),
-      meta: { title: () => '排班详情', hideMenu: true },
+      meta: { title: () => '排班详情', hideMenu: true, requiredAnyPermissions: ['schedule:view:node', 'schedule:view:all'] },
     },
 
-    // ========== 基础数据 ==========
-    {
-      path: 'employees',
-      name: 'EmployeeList',
-      component: () => import('@/views/employees/EmployeeList.vue'),
-      meta: { title: () => '员工管理', icon: 'user' },
-    },
-    {
-      path: 'shifts',
-      name: 'ShiftList',
-      component: () => import('@/views/shifts/ShiftList.vue'),
-      meta: { title: () => '班次管理', icon: 'clock' },
-    },
-    {
-      path: 'groups',
-      name: 'GroupList',
-      component: () => import('@/views/groups/GroupList.vue'),
-      meta: { title: () => '分组管理', icon: 'collection' },
-    },
-    {
-      path: 'rules',
-      name: 'RuleList',
-      component: () => import('@/views/rules/RuleList.vue'),
-      meta: { title: () => '排班规则', icon: 'document' },
-    },
     {
       path: 'leaves',
       name: 'LeaveList',
@@ -77,12 +58,11 @@ export const RootRoute: RouteRecordRaw[] = [{
       meta: { title: () => '请假管理', icon: 'calendar' },
     },
 
-    // ========== 组织管理 ==========
     {
-      path: 'org',
-      name: 'OrgTree',
-      component: () => import('@/views/org/OrgTree.vue'),
-      meta: { title: () => '组织管理', icon: 'office-building', requiredRole: 'org_admin' },
+      path: 'management-admin',
+      name: 'ManagementMoved',
+      component: () => import('@/views/notice/ManagementMoved.vue'),
+      meta: { title: () => '配置入口已迁移', hideMenu: true },
     },
 
     // ========== AI ==========
@@ -91,14 +71,6 @@ export const RootRoute: RouteRecordRaw[] = [{
       name: 'AIChat',
       component: () => import('@/views/ai/ChatView.vue'),
       meta: { title: () => 'AI 助手', icon: 'chat-dot-round' },
-    },
-
-    // ========== 系统设置 ==========
-    {
-      path: 'settings',
-      name: 'Settings',
-      component: () => import('@/views/settings/SettingsPage.vue'),
-      meta: { title: () => '系统设置', icon: 'setting', requiredRole: 'org_admin' },
     },
   ],
 }]
@@ -155,12 +127,18 @@ const LegacyRedirects: RouteRecordRaw[] = [
   { path: '/workspace', redirect: '/scheduling' },
   { path: '/workspace/scheduling/create', redirect: '/scheduling/create' },
   { path: '/workspace/scheduling/history', redirect: '/scheduling' },
-  { path: '/management/employee', redirect: '/employees' },
-  { path: '/management/shift', redirect: '/shifts' },
-  { path: '/management/group', redirect: '/groups' },
-  { path: '/management/scheduling-rule', redirect: '/rules' },
+  { path: '/management/employee', redirect: '/management-admin' },
+  { path: '/management/shift', redirect: '/management-admin' },
+  { path: '/management/group', redirect: '/management-admin' },
+  { path: '/management/scheduling-rule', redirect: '/management-admin' },
   { path: '/management/leave', redirect: '/leaves' },
-  { path: '/management/department', redirect: '/org' },
+  { path: '/management/department', redirect: '/management-admin' },
+  { path: '/employees', redirect: '/management-admin' },
+  { path: '/shifts', redirect: '/management-admin' },
+  { path: '/groups', redirect: '/management-admin' },
+  { path: '/rules', redirect: '/management-admin' },
+  { path: '/org', redirect: '/management-admin' },
+  { path: '/settings', redirect: '/management-admin' },
 ]
 
 export const allRoutes: RouteRecordRaw[] = [

@@ -2,11 +2,15 @@
 import type { SchedulePlan } from '@/api/schedules'
 import { Delete, Plus, Search, View } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { deleteSchedule, listSchedules } from '@/api/schedules'
 import { usePagination } from '@/composables/usePagination'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const auth = useAuthStore()
+const canCreateSchedule = computed(() => auth.hasPermission('schedule:create'))
 
 const { loading, items, total, currentPage, currentPageSize, keyword, handlePageChange, handleSizeChange, refresh } = usePagination<SchedulePlan>({
   fetchFn: listSchedules,
@@ -36,7 +40,7 @@ async function handleDelete(row: SchedulePlan) {
   <div class="page-container">
     <div class="page-toolbar">
       <el-input v-model="keyword" placeholder="搜索排班计划" clearable style="width: 240px" :prefix-icon="Search" />
-      <el-button type="primary" :icon="Plus" @click="router.push('/scheduling/create')">
+      <el-button v-if="canCreateSchedule" type="primary" :icon="Plus" @click="router.push('/scheduling/create')">
         创建排班
       </el-button>
     </div>

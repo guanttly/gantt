@@ -23,6 +23,8 @@ type OrgNode struct {
 	NodeType     string    `gorm:"size:32;not null" json:"node_type"`
 	Name         string    `gorm:"size:128;not null" json:"name"`
 	Code         string    `gorm:"size:64;not null" json:"code"`
+	ContactName  *string   `gorm:"size:64" json:"contact_name,omitempty"`
+	ContactPhone *string   `gorm:"size:20" json:"contact_phone,omitempty"`
 	Path         string    `gorm:"size:512;not null;index:idx_path" json:"path"`
 	Depth        int       `gorm:"not null;default:0" json:"depth"`
 	IsLoginPoint bool      `gorm:"not null;default:false" json:"is_login_point"`

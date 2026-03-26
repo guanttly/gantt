@@ -4,9 +4,11 @@ import { ElMessage } from 'element-plus'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { generateSchedule, getAssignments, getSchedule, getScheduleSummary, publishSchedule, validateSchedule } from '@/api/schedules'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const scheduleId = route.params.id as string
 
 const loading = ref(true)
@@ -94,13 +96,13 @@ onMounted(loadData)
           </el-tag>
         </div>
         <div class="header-actions">
-          <el-button v-if="schedule.status === 'draft'" type="primary" @click="handleGenerate">
+          <el-button v-if="schedule.status === 'draft' && auth.hasPermission('schedule:execute')" type="primary" @click="handleGenerate">
             生成排班
           </el-button>
-          <el-button v-if="schedule.status === 'generated'" @click="handleValidate">
+          <el-button v-if="schedule.status === 'generated' && auth.hasPermission('schedule:adjust')" @click="handleValidate">
             验证
           </el-button>
-          <el-button v-if="schedule.status === 'generated'" type="success" @click="handlePublish">
+          <el-button v-if="schedule.status === 'generated' && auth.hasPermission('schedule:publish')" type="success" @click="handlePublish">
             发布
           </el-button>
         </div>

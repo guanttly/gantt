@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"gantt-saas/internal/common/response"
+	"gantt-saas/internal/core/approle"
 	"gantt-saas/internal/core/schedule/step"
 
 	"github.com/go-chi/chi/v5"
@@ -103,6 +104,29 @@ func (h *Handler) GetAssignments(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	assignments, err := h.svc.GetAssignments(r.Context(), id)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.OK(w, assignments)
+}
+
+// GetSelfAssignments 查看当前员工在日期范围内的已发布排班。
+// GET /api/v1/scheduling/assignments/self
+func (h *Handler) GetSelfAssignments(w http.ResponseWriter, r *http.Request) {
+	employeeID := approle.CurrentEmployeeID(r.Context())
+	if employeeID == "" {
+		response.Forbidden(w, "权限不足")
+		return
+	}
+
+	assignments, err := h.svc.GetSelfAssignments(
+		r.Context(),
+		employeeID,
+		r.URL.Query().Get("start_date"),
+		r.URL.Query().Get("end_date"),
+	)
 	if err != nil {
 		h.handleError(w, err)
 		return

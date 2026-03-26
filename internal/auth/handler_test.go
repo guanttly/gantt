@@ -150,6 +150,7 @@ func TestHandleError_AllCases(t *testing.T) {
 		{"UsernameExists", ErrUsernameExists, http.StatusConflict},
 		{"EmailExists", ErrEmailExists, http.StatusConflict},
 		{"NodeRoleExists", ErrNodeRoleExists, http.StatusConflict},
+		{"PublicRegisterRole", ErrPublicRegisterRole, http.StatusBadRequest},
 		{"WeakPassword", ErrWeakPassword, http.StatusBadRequest},
 		{"RoleNotFound", ErrRoleNotFound, http.StatusNotFound},
 		{"OldPasswordMismatch", ErrOldPasswordMismatch, http.StatusBadRequest},

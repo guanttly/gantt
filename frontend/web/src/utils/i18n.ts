@@ -1,7 +1,4 @@
 import type { App } from 'vue'
-import ElementPlus from 'element-plus'
-// @ts-expect-error element-plus locale has no type declaration
-import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 import { createI18n } from 'vue-i18n'
 
 const messages = Object.fromEntries(
@@ -25,7 +22,4 @@ export { i18n }
 
 export function installI18n(app: App<Element>) {
   app.use(i18n)
-  app.use(ElementPlus, {
-    locale: zhCn,
-  })
 }

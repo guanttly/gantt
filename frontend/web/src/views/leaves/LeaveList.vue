@@ -1,14 +1,20 @@
 <script setup lang="ts">
 import type { Leave } from '@/api/leaves'
-import { Delete, Edit, Plus, Search } from '@element-plus/icons-vue'
+import { Check, Close, Delete, Edit, Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { reactive, ref } from 'vue'
-import { createLeave, deleteLeave, listLeaves, updateLeave } from '@/api/leaves'
+import { computed, reactive, ref } from 'vue'
+import { approveLeave, createLeave, deleteLeave, listLeaves, updateLeave } from '@/api/leaves'
 import { usePagination } from '@/composables/usePagination'
+import { useAuthStore } from '@/stores/auth'
 
 const { loading, items, total, currentPage, currentPageSize, keyword, handlePageChange, handleSizeChange, refresh } = usePagination<Leave>({
   fetchFn: listLeaves,
 })
+const auth = useAuthStore()
+
+const canCreateOwnLeave = computed(() => auth.hasPermission('leave:create:self'))
+const canApproveLeave = computed(() => auth.hasPermission('leave:approve'))
+const currentEmployeeId = computed(() => auth.boundEmployeeId)
 
 const statusMap: Record<string, { label: string, type: string }> = {
   pending: { label: '待审批', type: 'warning' },
@@ -40,7 +46,7 @@ const formRef = ref()
 function handleAdd() {
   editingId.value = null
   dialogTitle.value = '新增请假'
-  Object.assign(form, { employee_id: '', type: '年假', start_date: '', end_date: '', reason: '' })
+  Object.assign(form, { employee_id: currentEmployeeId.value || '', type: '年假', start_date: '', end_date: '', reason: '' })
   dialogVisible.value = true
 }
 
@@ -66,6 +72,7 @@ async function handleSubmit() {
   }
   formLoading.value = true
   try {
+    form.employee_id = currentEmployeeId.value || form.employee_id
     if (editingId.value) {
       await updateLeave(editingId.value, form)
       ElMessage.success('更新成功')
@@ -96,13 +103,28 @@ async function handleDelete(row: Leave) {
     ElMessage.error(e?.response?.data?.message || '删除失败')
   }
 }
+
+async function handleApprove(row: Leave, approved: boolean) {
+  try {
+    await approveLeave(row.id, { approved })
+    ElMessage.success(approved ? '审批通过' : '已驳回')
+    refresh()
+  }
+  catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '审批失败')
+  }
+}
+
+function canEditOwnLeave(row: Leave) {
+  return canCreateOwnLeave.value && row.status === 'pending' && row.employee_id === currentEmployeeId.value
+}
 </script>
 
 <template>
   <div class="page-container">
     <div class="page-toolbar">
       <el-input v-model="keyword" placeholder="搜索请假" clearable style="width: 240px" :prefix-icon="Search" />
-      <el-button type="primary" :icon="Plus" @click="handleAdd">
+      <el-button v-if="canCreateOwnLeave" type="primary" :icon="Plus" @click="handleAdd">
         新增请假
       </el-button>
     </div>
@@ -120,13 +142,19 @@ async function handleDelete(row: Leave) {
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column label="操作" :width="canApproveLeave ? 220 : 160" fixed="right">
         <template #default="{ row }">
-          <el-button :icon="Edit" link type="primary" :disabled="row.status !== 'pending'" @click="handleEdit(row)">
+          <el-button v-if="canEditOwnLeave(row)" :icon="Edit" link type="primary" @click="handleEdit(row)">
             编辑
           </el-button>
-          <el-button :icon="Delete" link type="danger" :disabled="row.status !== 'pending'" @click="handleDelete(row)">
+          <el-button v-if="canEditOwnLeave(row)" :icon="Delete" link type="danger" @click="handleDelete(row)">
             删除
+          </el-button>
+          <el-button v-if="canApproveLeave && row.status === 'pending'" :icon="Check" link type="success" @click="handleApprove(row, true)">
+            通过
+          </el-button>
+          <el-button v-if="canApproveLeave && row.status === 'pending'" :icon="Close" link type="danger" @click="handleApprove(row, false)">
+            驳回
           </el-button>
         </template>
       </el-table-column>
@@ -147,7 +175,7 @@ async function handleDelete(row: Leave) {
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="员工ID" prop="employee_id">
-          <el-input v-model="form.employee_id" placeholder="请输入员工 ID" />
+          <el-input v-model="form.employee_id" disabled placeholder="当前登录员工" />
         </el-form-item>
         <el-form-item label="类型">
           <el-select v-model="form.type" placeholder="选择类型">

@@ -33,9 +33,9 @@ async function handleLogin() {
   try {
     const res = await auth.login(form.username, form.password)
 
-    if (!auth.hasRole(RoleName.PlatformAdmin)) {
+    if (![RoleName.PlatformAdmin, RoleName.OrgAdmin, RoleName.DeptAdmin].includes(auth.currentRole)) {
       auth.logout()
-      message.error('仅限平台管理员登录')
+      message.error('仅限平台管理账号登录')
       return
     }
 
@@ -75,7 +75,7 @@ async function handleLogin() {
       <section class="auth-card">
         <div class="auth-card-header">
           <h1>登录管理后台</h1>
-          <p>仅平台管理员可访问。首次登录如使用默认口令，系统会强制要求重置密码。</p>
+          <p>平台管理员、机构管理员、科室管理员可访问。首次登录如使用默认口令，系统会强制要求重置密码。</p>
         </div>
 
         <n-form

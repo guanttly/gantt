@@ -58,6 +58,21 @@ type Assignment struct {
 // TableName 指定表名。
 func (Assignment) TableName() string { return "schedule_assignments" }
 
+type SelfAssignmentView struct {
+	ID           string `json:"id"`
+	ScheduleID   string `json:"schedule_id"`
+	ScheduleName string `json:"schedule_name"`
+	EmployeeID   string `json:"employee_id"`
+	ShiftID      string `json:"shift_id"`
+	ShiftName    string `json:"shift_name"`
+	ShiftColor   string `json:"shift_color"`
+	Date         string `json:"date"`
+	StartTime    string `json:"start_time"`
+	EndTime      string `json:"end_time"`
+	Source       string `json:"source"`
+	Status       string `json:"status"`
+}
+
 // Change 排班变更记录 DB 模型。
 type Change struct {
 	ID           string          `gorm:"primaryKey;size:64" json:"id"`

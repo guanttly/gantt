@@ -25,6 +25,34 @@ export interface CurrentNode {
   role_name: string
 }
 
+export interface AppRoleGrant {
+  id: string
+  employee_id: string
+  org_node_id: string
+  org_node_name: string
+  app_role: string
+  source: string
+  source_group_id?: string
+  source_group_name?: string
+  granted_by: string
+  granted_at: string
+  expires_at?: string
+}
+
+export interface AppRolesResponse {
+  employee_id: string
+  org_node_id: string
+  org_node_name: string
+  app_roles: AppRoleGrant[]
+}
+
+export interface AppPermissionsResponse {
+  employee_id: string
+  org_node_id: string
+  org_node_name: string
+  permissions: string[]
+}
+
 /** 登录请求 */
 export interface LoginRequest {
   username: string
@@ -87,6 +115,19 @@ export interface UserInfoResponse {
   current_node: CurrentNode
   available_nodes: OrgNode[]
 }
+
+export type AppPermission =
+  | 'schedule:create'
+  | 'schedule:execute'
+  | 'schedule:adjust'
+  | 'schedule:publish'
+  | 'schedule:view:all'
+  | 'schedule:view:node'
+  | 'schedule:view:self'
+  | 'leave:approve'
+  | 'leave:view:node'
+  | 'leave:create:self'
+  | 'preference:edit:self'
 
 /** 角色层级（从低到高） */
 export const ROLE_HIERARCHY = [

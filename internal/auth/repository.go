@@ -165,5 +165,12 @@ func (r *Repository) GetUsersByNodeID(ctx context.Context, orgNodeID string) ([]
 
 // AutoMigrate 自动迁移认证相关表结构。
 func (r *Repository) AutoMigrate() error {
+	migrator := r.db.Migrator()
+	if migrator.HasTable("users") && !migrator.HasTable(&User{}) {
+		if err := migrator.RenameTable("users", (&User{}).TableName()); err != nil {
+			return err
+		}
+	}
+
 	return r.db.AutoMigrate(&User{}, &Role{}, &UserNodeRole{})
 }

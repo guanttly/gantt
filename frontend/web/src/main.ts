@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
+import { ElLoadingDirective } from 'element-plus'
 import App from './App.vue'
 import { installRouter } from './router'
 import pinia from './stores'
@@ -19,4 +20,5 @@ const app = createApp(App)
 app.use(pinia)
 installRouter(app)
 installI18n(app)
+app.directive('loading', ElLoadingDirective)
 app.mount('#app')

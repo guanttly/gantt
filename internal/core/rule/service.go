@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
+	"time"
 
 	"gantt-saas/internal/tenant"
 
@@ -13,14 +16,21 @@ import (
 )
 
 var (
-	ErrRuleNotFound     = errors.New("规则不存在")
-	ErrInvalidCategory  = errors.New("无效的规则分类")
-	ErrInvalidSubType   = errors.New("无效的规则子类型")
-	ErrInvalidConfig    = errors.New("无效的规则配置")
-	ErrRuleNameDup      = errors.New("同节点下规则名称已存在")
-	ErrOverrideNotFound = errors.New("覆盖的上级规则不存在")
-	ErrCannotOverride   = errors.New("只能覆盖上级节点的规则")
+	ErrRuleNotFound          = errors.New("规则不存在")
+	ErrInvalidCategory       = errors.New("无效的规则分类")
+	ErrInvalidSubType        = errors.New("无效的规则子类型")
+	ErrInvalidConfig         = errors.New("无效的规则配置")
+	ErrRuleNameDup           = errors.New("同节点下规则名称已存在")
+	ErrOverrideNotFound      = errors.New("覆盖的上级规则不存在")
+	ErrCannotOverride        = errors.New("只能覆盖上级节点的规则")
+	ErrInvalidDisableReason  = errors.New("禁用规则时必须填写原因")
+	ErrCannotDisable         = errors.New("只能禁用上级继承的规则")
+	ErrRuleAlreadyDisabled   = errors.New("该继承规则已在本级禁用")
+	ErrRuleAlreadyOverridden = errors.New("该继承规则已被本级覆盖，不能直接禁用")
+	ErrNothingToRestore      = errors.New("未找到可恢复的继承配置")
 )
+
+var nowFunc = time.Now
 
 // 合法的分类和子类型。
 var validCategories = map[string]bool{
@@ -108,16 +118,24 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*Rule, error) 
 
 	// 如果指定了覆盖规则，校验覆盖规则存在且属于上级节点
 	if input.OverrideRuleID != nil && *input.OverrideRuleID != "" {
-		overrideRule, err := s.repo.GetByID(ctx, *input.OverrideRuleID)
+		overrideRule, err := s.repo.GetByIDAnyScope(ctx, *input.OverrideRuleID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, ErrOverrideNotFound
 			}
 			return nil, fmt.Errorf("查询覆盖规则失败: %w", err)
 		}
-		// 确保覆盖的规则不在当前节点（只能覆盖上级的规则）
-		if overrideRule.OrgNodeID == orgNodeID {
+		if !s.isAncestorRule(ctx, orgNodeID, overrideRule.OrgNodeID) {
 			return nil, ErrCannotOverride
+		}
+
+		existing, err := s.repo.GetByNodeAndOverrideRuleID(ctx, orgNodeID, overrideRule.ID)
+		if err == nil {
+			if existing.Disabled {
+				return nil, ErrRuleAlreadyDisabled
+			}
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("查询本级继承配置失败: %w", err)
 		}
 	}
 
@@ -254,6 +272,25 @@ func (s *Service) List(ctx context.Context) ([]RuleWithSource, error) {
 		result = append(result, rws)
 	}
 
+	disabledInherited, err := s.listDisabledInheritedRules(ctx, orgNodeID)
+	if err != nil {
+		return nil, err
+	}
+	result = append(result, disabledInherited...)
+
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Category != result[j].Category {
+			return result[i].Category < result[j].Category
+		}
+		if result[i].Priority != result[j].Priority {
+			return result[i].Priority < result[j].Priority
+		}
+		if result[i].Name != result[j].Name {
+			return result[i].Name < result[j].Name
+		}
+		return result[i].ID < result[j].ID
+	})
+
 	return result, nil
 }
 
@@ -269,4 +306,173 @@ func (s *Service) ListEffective(ctx context.Context) (*EffectiveRuleSet, error) 
 // GetAssociations 获取规则的关联列表。
 func (s *Service) GetAssociations(ctx context.Context, ruleID string) ([]RuleAssociation, error) {
 	return s.repo.ListAssociationsByRule(ctx, ruleID)
+}
+
+// DisableInherited 在当前节点禁用一条上级继承规则。
+func (s *Service) DisableInherited(ctx context.Context, ruleID, reason, actorUserID string) (*RuleWithSource, error) {
+	orgNodeID := tenant.GetOrgNodeID(ctx)
+	if orgNodeID == "" {
+		return nil, fmt.Errorf("缺少组织节点信息")
+	}
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return nil, ErrInvalidDisableReason
+	}
+
+	sourceRule, err := s.repo.GetByIDAnyScope(ctx, ruleID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrRuleNotFound
+		}
+		return nil, fmt.Errorf("查询待禁用规则失败: %w", err)
+	}
+	if !s.isAncestorRule(ctx, orgNodeID, sourceRule.OrgNodeID) {
+		return nil, ErrCannotDisable
+	}
+
+	existing, err := s.repo.GetByNodeAndOverrideRuleID(ctx, orgNodeID, sourceRule.ID)
+	if err == nil {
+		if existing.Disabled {
+			return nil, ErrRuleAlreadyDisabled
+		}
+		return nil, ErrRuleAlreadyOverridden
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("查询本级继承配置失败: %w", err)
+	}
+
+	now := nowFunc()
+	marker := &Rule{
+		ID:             uuid.New().String(),
+		Name:           sourceRule.Name,
+		Category:       sourceRule.Category,
+		SubType:        sourceRule.SubType,
+		Config:         sourceRule.Config,
+		Priority:       sourceRule.Priority,
+		IsEnabled:      true,
+		Disabled:       true,
+		DisabledBy:     stringPtrOrNil(strings.TrimSpace(actorUserID)),
+		DisabledAt:     &now,
+		DisabledReason: &reason,
+		OverrideRuleID: &sourceRule.ID,
+		Description:    sourceRule.Description,
+		TenantModel: tenant.TenantModel{
+			OrgNodeID: orgNodeID,
+		},
+	}
+	if err := s.repo.Create(ctx, marker); err != nil {
+		return nil, fmt.Errorf("创建规则禁用标记失败: %w", err)
+	}
+
+	return s.buildDisabledRuleView(ctx, orgNodeID, sourceRule, marker)
+}
+
+// RestoreInheritance 删除本级覆盖或禁用标记，恢复使用上级规则。
+func (s *Service) RestoreInheritance(ctx context.Context, ruleID string) error {
+	orgNodeID := tenant.GetOrgNodeID(ctx)
+	if orgNodeID == "" {
+		return fmt.Errorf("缺少组织节点信息")
+	}
+
+	rule, err := s.repo.GetByIDAnyScope(ctx, ruleID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrRuleNotFound
+		}
+		return fmt.Errorf("查询规则失败: %w", err)
+	}
+
+	if rule.OrgNodeID == orgNodeID && rule.OverrideRuleID != nil && *rule.OverrideRuleID != "" {
+		if err := s.repo.Delete(ctx, rule.ID); err != nil {
+			return fmt.Errorf("删除本级覆盖规则失败: %w", err)
+		}
+		return nil
+	}
+
+	localRule, err := s.repo.GetByNodeAndOverrideRuleID(ctx, orgNodeID, rule.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrNothingToRestore
+		}
+		return fmt.Errorf("查询本级继承配置失败: %w", err)
+	}
+
+	if err := s.repo.Delete(ctx, localRule.ID); err != nil {
+		return fmt.Errorf("删除本级继承配置失败: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) listDisabledInheritedRules(ctx context.Context, orgNodeID string) ([]RuleWithSource, error) {
+	markers, err := s.repo.ListDisabledByNodeID(ctx, orgNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("查询规则禁用标记失败: %w", err)
+	}
+
+	result := make([]RuleWithSource, 0, len(markers))
+	for _, marker := range markers {
+		if marker.OverrideRuleID == nil || *marker.OverrideRuleID == "" {
+			continue
+		}
+
+		sourceRule, err := s.repo.GetByIDAnyScope(ctx, *marker.OverrideRuleID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				continue
+			}
+			return nil, fmt.Errorf("查询被禁用规则失败: %w", err)
+		}
+
+		view, err := s.buildDisabledRuleView(ctx, orgNodeID, sourceRule, &marker)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *view)
+	}
+
+	return result, nil
+}
+
+func (s *Service) buildDisabledRuleView(ctx context.Context, orgNodeID string, sourceRule, marker *Rule) (*RuleWithSource, error) {
+	viewRule := *sourceRule
+	viewRule.Disabled = true
+	viewRule.DisabledBy = marker.DisabledBy
+	viewRule.DisabledAt = marker.DisabledAt
+	viewRule.DisabledReason = marker.DisabledReason
+
+	sourceNode := ""
+	if node, err := s.nodeRepo.GetByID(ctx, sourceRule.OrgNodeID); err == nil {
+		sourceNode = node.Name
+	}
+
+	return &RuleWithSource{
+		Rule:          viewRule,
+		SourceNode:    sourceNode,
+		IsInherited:   sourceRule.OrgNodeID != orgNodeID,
+		IsOverridable: sourceRule.OrgNodeID != orgNodeID,
+	}, nil
+}
+
+func (s *Service) isAncestorRule(ctx context.Context, currentNodeID, ruleNodeID string) bool {
+	if currentNodeID == "" || ruleNodeID == "" || currentNodeID == ruleNodeID {
+		return false
+	}
+
+	node, err := s.nodeRepo.GetByID(ctx, currentNodeID)
+	if err != nil {
+		return false
+	}
+	for _, ancestorID := range extractAncestorIDs(node.Path) {
+		if ancestorID == ruleNodeID {
+			return true
+		}
+	}
+	return false
+}
+
+func stringPtrOrNil(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }
