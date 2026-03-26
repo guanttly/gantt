@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"gantt-saas/internal/common/response"
+	"gantt-saas/internal/tenant"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -121,6 +122,10 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		response.NotFound(w, err.Error())
 	case errors.Is(err, ErrEmployeeNoDup):
 		response.Conflict(w, err.Error())
+	case errors.Is(err, tenant.ErrNodeNotFound):
+		response.NotFound(w, err.Error())
+	case errors.Is(err, ErrEmployeeNodeOutOfScope):
+		response.Forbidden(w, err.Error())
 	default:
 		response.InternalError(w, "内部错误")
 	}

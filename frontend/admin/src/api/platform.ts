@@ -19,6 +19,7 @@ export interface PlatformEmployee {
 }
 
 export interface PlatformEmployeePayload {
+  org_node_id?: string
   name: string
   employee_no?: string
   phone?: string
@@ -184,7 +185,7 @@ export interface GroupDefaultAppRole {
 }
 
 export function listPlatformEmployees(params?: Record<string, unknown>) {
-  return client.get<PaginatedResponse<PlatformEmployee>>('/platform/employees/', { params }).then(r => r.data)
+  return client.get<PaginatedResponse<PlatformEmployee>>('/platform/employees/', { params: { scope: 'tree', ...params } }).then(r => r.data)
 }
 
 export function createPlatformEmployee(data: PlatformEmployeePayload) {

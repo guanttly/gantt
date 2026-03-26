@@ -2,11 +2,16 @@
 import type { PlatformEmployee, PlatformEmployeePayload } from '@/api/platform'
 import { computed, onMounted, ref } from 'vue'
 import { NButton, NForm, NFormItem, NInput, NModal, NSelect, NSpin, NTag, useDialog, useMessage } from 'naive-ui'
+import { getOrgTree } from '@/api/org'
 import { createPlatformEmployee, deletePlatformEmployee, listPlatformEmployees, updatePlatformEmployee } from '@/api/platform'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
 
 const loading = ref(false)
 const saving = ref(false)
 const employees = ref<PlatformEmployee[]>([])
+const orgTree = ref<any[]>([])
 const keyword = ref('')
 const dialogVisible = ref(false)
 const editingEmployee = ref<PlatformEmployee | null>(null)
@@ -14,6 +19,7 @@ const message = useMessage()
 const dialog = useDialog()
 
 const form = ref<PlatformEmployeePayload>({
+  org_node_id: '',
   name: '',
   employee_no: '',
   phone: '',
@@ -43,12 +49,26 @@ const statusOptions = [
   { label: '停用', value: 'inactive' },
 ]
 
+const orgOptions = computed(() => flattenOrgTree(orgTree.value))
+
 function normalizePayload(payload: PlatformEmployeePayload): PlatformEmployeePayload {
   return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== '' && value !== undefined)) as PlatformEmployeePayload
 }
 
+function flattenOrgTree(nodes: any[], level = 0): Array<{ label: string, value: string }> {
+  return nodes.flatMap(node => [
+    { label: `${'　'.repeat(level)}${node.name}`, value: node.id },
+    ...flattenOrgTree(node.children || [], level + 1),
+  ])
+}
+
+function orgNodeName(orgNodeId: string) {
+  return orgOptions.value.find(item => item.value === orgNodeId)?.label.trim() || orgNodeId
+}
+
 function resetForm() {
   form.value = {
+    org_node_id: auth.currentNode?.node_id || orgOptions.value[0]?.value || '',
     name: '',
     employee_no: '',
     phone: '',
@@ -63,8 +83,12 @@ function resetForm() {
 async function loadEmployees() {
   loading.value = true
   try {
-    const result = await listPlatformEmployees({ page: 1, size: 200 })
+    const [result, tree] = await Promise.all([
+      listPlatformEmployees({ page: 1, size: 200 }),
+      getOrgTree(),
+    ])
     employees.value = result.data
+    orgTree.value = tree
   }
   finally {
     loading.value = false
@@ -80,6 +104,7 @@ function openCreate() {
 function openEdit(employee: PlatformEmployee) {
   editingEmployee.value = employee
   form.value = {
+    org_node_id: employee.org_node_id,
     name: employee.name,
     employee_no: employee.employee_no,
     phone: employee.phone,
@@ -95,6 +120,10 @@ function openEdit(employee: PlatformEmployee) {
 async function submit() {
   if (!form.value.name?.trim()) {
     message.warning('请输入员工姓名')
+    return
+  }
+  if (!form.value.org_node_id) {
+    message.warning('请选择所属组织节点')
     return
   }
 
@@ -165,6 +194,7 @@ onMounted(loadEmployees)
             <table class="admin-table">
               <thead>
                 <tr>
+                  <th>所属节点</th>
                   <th>姓名</th>
                   <th>工号</th>
                   <th>职位</th>
@@ -176,6 +206,7 @@ onMounted(loadEmployees)
               </thead>
               <tbody>
                 <tr v-for="item in filteredEmployees" :key="item.id">
+                  <td>{{ orgNodeName(item.org_node_id) }}</td>
                   <td>{{ item.name }}</td>
                   <td>{{ item.employee_no || '-' }}</td>
                   <td>{{ item.position || '-' }}</td>
@@ -197,7 +228,7 @@ onMounted(loadEmployees)
                   </td>
                 </tr>
                 <tr v-if="!filteredEmployees.length">
-                  <td colspan="7" class="table-empty">暂无员工数据</td>
+                  <td colspan="8" class="table-empty">暂无员工数据</td>
                 </tr>
               </tbody>
             </table>
@@ -208,6 +239,9 @@ onMounted(loadEmployees)
       <n-modal v-model:show="dialogVisible" preset="card" :title="editingEmployee ? '编辑员工' : '新增员工'" style="width: min(640px, calc(100vw - 32px))">
         <n-form :model="form" label-placement="left" label-width="88">
           <div class="form-grid two-column">
+            <n-form-item label="所属节点">
+              <n-select v-model:value="form.org_node_id" filterable :options="orgOptions" placeholder="选择员工所属组织节点" />
+            </n-form-item>
             <n-form-item label="姓名">
               <n-input v-model:value="form.name" placeholder="输入员工姓名" />
             </n-form-item>

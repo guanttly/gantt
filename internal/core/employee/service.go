@@ -14,12 +14,14 @@ import (
 )
 
 var (
-	ErrEmployeeNotFound = errors.New("员工不存在")
-	ErrEmployeeNoDup    = errors.New("同节点下工号已存在")
+	ErrEmployeeNotFound       = errors.New("员工不存在")
+	ErrEmployeeNoDup          = errors.New("同节点下工号已存在")
+	ErrEmployeeNodeOutOfScope = errors.New("目标组织节点不在当前管理范围内")
 )
 
 // CreateInput 创建员工的输入参数。
 type CreateInput struct {
+	OrgNodeID  *string `json:"org_node_id,omitempty"`
 	Name       string  `json:"name"`
 	EmployeeNo *string `json:"employee_no"`
 	Phone      *string `json:"phone"`
@@ -31,6 +33,7 @@ type CreateInput struct {
 
 // UpdateInput 更新员工的输入参数。
 type UpdateInput struct {
+	OrgNodeID  *string `json:"org_node_id,omitempty"`
 	Name       *string `json:"name,omitempty"`
 	EmployeeNo *string `json:"employee_no,omitempty"`
 	Phone      *string `json:"phone,omitempty"`
@@ -62,7 +65,10 @@ func (s *Service) SetAppRoleCleaner(cleaner AppRoleCleaner) {
 
 // Create 创建员工。
 func (s *Service) Create(ctx context.Context, input CreateInput) (*Employee, error) {
-	orgNodeID := tenant.GetOrgNodeID(ctx)
+	orgNodeID, err := s.resolveTargetOrgNodeID(ctx, input.OrgNodeID)
+	if err != nil {
+		return nil, err
+	}
 	if orgNodeID == "" {
 		return nil, fmt.Errorf("缺少组织节点信息")
 	}
@@ -150,6 +156,15 @@ func (s *Service) Update(ctx context.Context, id string, input UpdateInput) (*Em
 		return nil, err
 	}
 
+	originalOrgNodeID := emp.OrgNodeID
+	if input.OrgNodeID != nil {
+		targetOrgNodeID, err := s.resolveTargetOrgNodeID(ctx, input.OrgNodeID)
+		if err != nil {
+			return nil, err
+		}
+		emp.OrgNodeID = targetOrgNodeID
+	}
+
 	if input.Name != nil {
 		emp.Name = *input.Name
 	}
@@ -187,6 +202,12 @@ func (s *Service) Update(ctx context.Context, id string, input UpdateInput) (*Em
 
 	if err := s.repo.Update(ctx, emp); err != nil {
 		return nil, fmt.Errorf("更新员工失败: %w", err)
+	}
+
+	if originalOrgNodeID != emp.OrgNodeID && s.appRoleCleaner != nil {
+		if err := s.appRoleCleaner.CleanupEmployeeRoles(ctx, emp.ID); err != nil {
+			return nil, err
+		}
 	}
 
 	if input.Status != nil && *input.Status == StatusInactive && s.appRoleCleaner != nil {
@@ -227,4 +248,31 @@ func (s *Service) List(ctx context.Context, opts ListOptions) ([]Employee, int64
 		opts.Size = 100
 	}
 	return s.repo.List(ctx, opts)
+}
+
+func (s *Service) resolveTargetOrgNodeID(ctx context.Context, target *string) (string, error) {
+	currentOrgNodeID := tenant.GetOrgNodeID(ctx)
+	if currentOrgNodeID == "" {
+		return "", fmt.Errorf("缺少组织节点信息")
+	}
+	if target == nil || strings.TrimSpace(*target) == "" {
+		return currentOrgNodeID, nil
+	}
+
+	targetOrgNodeID := strings.TrimSpace(*target)
+	var node tenant.OrgNode
+	if err := s.repo.db.WithContext(tenant.SkipTenantGuard(ctx)).Where("id = ?", targetOrgNodeID).First(&node).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", tenant.ErrNodeNotFound
+		}
+		return "", fmt.Errorf("查询组织节点失败: %w", err)
+	}
+
+	currentPath := strings.TrimRight(tenant.GetOrgNodePath(ctx), "/")
+	targetPath := strings.TrimRight(node.Path, "/")
+	if currentPath != "" && targetPath != currentPath && !strings.HasPrefix(targetPath, currentPath+"/") {
+		return "", ErrEmployeeNodeOutOfScope
+	}
+
+	return node.ID, nil
 }
