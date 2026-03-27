@@ -244,6 +244,8 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrCannotAdjust):
 		response.BadRequest(w, err.Error())
+	case errors.Is(err, ErrNotLeafNode):
+		response.Forbidden(w, err.Error())
 	default:
 		response.InternalError(w, "内部错误")
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -17,7 +18,15 @@ var (
 	ErrInvalidRootType  = errors.New("根组织仅允许使用机构类型")
 	ErrCannotDeleteRoot = errors.New("不能删除有子节点的节点")
 	ErrProtectedNode    = errors.New("平台管理根节点不允许删除")
+	ErrInvalidHierarchy = errors.New("不允许的层级关系")
 )
+
+// allowedChildTypes 定义行政架构的固定层级关系。
+var allowedChildTypes = map[string][]string{
+	NodeTypeOrganization: {NodeTypeCampus, NodeTypeDepartment},
+	NodeTypeCampus:       {NodeTypeDepartment},
+	NodeTypeDepartment:   {}, // 科室是叶子节点，不能建下级
+}
 
 const protectedPlatformRootCode = "platform-root"
 
@@ -91,6 +100,12 @@ func (s *Service) Create(ctx context.Context, input CreateNodeInput) (*OrgNode, 
 		}
 		if !parent.IsActive() {
 			return nil, ErrNodeSuspended
+		}
+		// 校验层级关系（custom 类型跳过层级检查）
+		if input.NodeType != NodeTypeCustom {
+			if err := validateNodeHierarchy(parent.NodeType, input.NodeType); err != nil {
+				return nil, err
+			}
 		}
 		node.Path = parent.Path + "/" + node.ID
 		node.Depth = parent.Depth + 1
@@ -259,6 +274,25 @@ func isProtectedNode(node *OrgNode) bool {
 	return node != nil && node.ParentID == nil && node.Code == protectedPlatformRootCode
 }
 
+// validateNodeHierarchy 校验父子节点类型的层级关系。
+func validateNodeHierarchy(parentType, childType string) error {
+	allowed, ok := allowedChildTypes[parentType]
+	if !ok {
+		return ErrInvalidHierarchy
+	}
+	for _, t := range allowed {
+		if t == childType {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: 不允许在 %s 下创建 %s 类型节点", ErrInvalidHierarchy, parentType, childType)
+}
+
+// IsLeafNodeType 检查节点类型是否为叶子类型（department）。
+func IsLeafNodeType(nodeType string) bool {
+	return nodeType == NodeTypeDepartment
+}
+
 // Move 移动节点到新的父节点下（更新节点及其所有后代的 path 和 depth）。
 func (s *Service) Move(ctx context.Context, id string, input MoveNodeInput) (*OrgNode, error) {
 	node, err := s.repo.GetByID(ctx, id)
@@ -319,6 +353,35 @@ func (s *Service) Move(ctx context.Context, id string, input MoveNodeInput) (*Or
 // GetDescendantIDs 获取某节点及其所有活跃后代的 ID 列表。
 func (s *Service) GetDescendantIDs(ctx context.Context, nodePath string) ([]string, error) {
 	return s.repo.GetDescendantIDs(ctx, nodePath)
+}
+
+// GetAncestorNames 根据节点路径获取从根到该节点的所有名称（用于路径展示）。
+// path 格式如 /org-id/campus-id/dept-id，返回 ["鼓楼医院", "本部院区", "放射科"]。
+func (s *Service) GetAncestorNames(ctx context.Context, nodePath string) ([]string, error) {
+	parts := strings.Split(strings.Trim(nodePath, "/"), "/")
+	if len(parts) == 0 {
+		return nil, nil
+	}
+
+	var nodes []OrgNode
+	if err := s.repo.db.WithContext(SkipTenantGuard(ctx)).
+		Where("id IN ?", parts).
+		Find(&nodes).Error; err != nil {
+		return nil, err
+	}
+
+	nameMap := make(map[string]string, len(nodes))
+	for _, n := range nodes {
+		nameMap[n.ID] = n.Name
+	}
+
+	names := make([]string, 0, len(parts))
+	for _, id := range parts {
+		if name, ok := nameMap[id]; ok {
+			names = append(names, name)
+		}
+	}
+	return names, nil
 }
 
 // buildTree 将扁平列表构建为树结构。

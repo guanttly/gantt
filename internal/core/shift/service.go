@@ -202,6 +202,15 @@ func (s *Service) List(ctx context.Context) ([]Shift, error) {
 	return s.repo.List(ctx)
 }
 
+// GetShiftTimeRange 获取班次的开始和结束时间（满足 step.ShiftTimeResolver 接口）。
+func (s *Service) GetShiftTimeRange(ctx context.Context, shiftID string) (string, string, error) {
+	sh, err := s.GetByID(ctx, shiftID)
+	if err != nil {
+		return "", "", err
+	}
+	return sh.StartTime, sh.EndTime, nil
+}
+
 // ListAvailable 查询排班应用可用班次列表。
 func (s *Service) ListAvailable(ctx context.Context) ([]Shift, error) {
 	return s.repo.ListActive(ctx)

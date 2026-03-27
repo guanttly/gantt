@@ -219,3 +219,25 @@ func (s *Service) RemoveMember(ctx context.Context, groupID, employeeID string) 
 	}
 	return nil
 }
+
+// RemoveEmployeeFromAllGroups 将员工从所有分组中移除（员工调动时调用），返回移除的分组数。
+func (s *Service) RemoveEmployeeFromAllGroups(ctx context.Context, employeeID string) (int64, error) {
+	// 先查出该员工属于哪些分组，以便撤销角色
+	members, err := s.repo.GetMembersByEmployeeID(ctx, employeeID)
+	if err != nil {
+		return 0, err
+	}
+
+	if s.appRoleSyncer != nil {
+		for _, m := range members {
+			_ = s.appRoleSyncer.RevokeRolesForGroupMember(ctx, m.GroupID, employeeID)
+		}
+	}
+
+	return s.repo.RemoveEmployeeFromAllGroups(ctx, employeeID)
+}
+
+// GetMemberEmployeeIDs 获取指定分组的所有成员员工ID列表。
+func (s *Service) GetMemberEmployeeIDs(ctx context.Context, groupID string) ([]string, error) {
+	return s.repo.GetMemberEmployeeIDs(ctx, groupID)
+}

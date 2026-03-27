@@ -3,7 +3,7 @@ import type { PlatformEmployee, PlatformEmployeePayload } from '@/api/platform'
 import { computed, onMounted, ref } from 'vue'
 import { NButton, NForm, NFormItem, NInput, NModal, NSelect, NSpin, NTag, useDialog, useMessage } from 'naive-ui'
 import { getOrgTree } from '@/api/org'
-import { createPlatformEmployee, deletePlatformEmployee, listPlatformEmployees, updatePlatformEmployee } from '@/api/platform'
+import { createPlatformEmployee, deletePlatformEmployee, listPlatformEmployees, transferEmployee, updatePlatformEmployee } from '@/api/platform'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -17,6 +17,11 @@ const dialogVisible = ref(false)
 const editingEmployee = ref<PlatformEmployee | null>(null)
 const message = useMessage()
 const dialog = useDialog()
+
+const transferVisible = ref(false)
+const transferring = ref(false)
+const transferTarget = ref<PlatformEmployee | null>(null)
+const transferForm = ref({ target_org_node_id: '', reason: '' })
 
 const form = ref<PlatformEmployeePayload>({
   org_node_id: '',
@@ -166,6 +171,32 @@ async function removeEmployee(employee: PlatformEmployee) {
   })
 }
 
+function openTransfer(employee: PlatformEmployee) {
+  transferTarget.value = employee
+  transferForm.value = { target_org_node_id: '', reason: '' }
+  transferVisible.value = true
+}
+
+async function submitTransfer() {
+  if (!transferTarget.value || !transferForm.value.target_org_node_id) {
+    message.warning('请选择目标组织节点')
+    return
+  }
+  transferring.value = true
+  try {
+    const result = await transferEmployee(transferTarget.value.id, transferForm.value)
+    message.success(`已将「${transferTarget.value.name}」从「${result.from_org_node.name}」调动至「${result.to_org_node.name}」`)
+    transferVisible.value = false
+    await loadEmployees()
+  }
+  catch (e: any) {
+    message.error(e?.response?.data?.message || '调动失败')
+  }
+  finally {
+    transferring.value = false
+  }
+}
+
 onMounted(loadEmployees)
 </script>
 
@@ -194,7 +225,7 @@ onMounted(loadEmployees)
             <table class="admin-table">
               <thead>
                 <tr>
-                  <th>所属节点</th>
+                  <th>所属组织</th>
                   <th>姓名</th>
                   <th>工号</th>
                   <th>职位</th>
@@ -206,7 +237,10 @@ onMounted(loadEmployees)
               </thead>
               <tbody>
                 <tr v-for="item in filteredEmployees" :key="item.id">
-                  <td>{{ orgNodeName(item.org_node_id) }}</td>
+                  <td>
+                    <div>{{ item.org_node_path_display || orgNodeName(item.org_node_id) }}</div>
+                    <div v-if="item.org_node_type" class="table-muted">{{ item.org_node_type }}</div>
+                  </td>
                   <td>{{ item.name }}</td>
                   <td>{{ item.employee_no || '-' }}</td>
                   <td>{{ item.position || '-' }}</td>
@@ -223,6 +257,7 @@ onMounted(loadEmployees)
                   <td>
                     <div class="table-actions">
                       <n-button text type="primary" @click="openEdit(item)">编辑</n-button>
+                      <n-button text type="warning" @click="openTransfer(item)">调动</n-button>
                       <n-button text type="error" @click="removeEmployee(item)">删除</n-button>
                     </div>
                   </td>
@@ -273,6 +308,26 @@ onMounted(loadEmployees)
           <div class="modal-actions">
             <n-button @click="dialogVisible = false">取消</n-button>
             <n-button type="primary" :loading="saving" @click="submit">保存</n-button>
+          </div>
+        </template>
+      </n-modal>
+
+      <n-modal v-model:show="transferVisible" preset="card" title="员工调动" style="width: min(480px, calc(100vw - 32px))">
+        <p style="margin-bottom: 16px; color: var(--admin-text-muted); font-size: 13px;">
+          将「{{ transferTarget?.name }}」从「{{ transferTarget?.org_node_path_display || orgNodeName(transferTarget?.org_node_id || '') }}」调动至新的组织节点。调动后将<strong>清除原有应用角色和分组关系</strong>。
+        </p>
+        <n-form :model="transferForm" label-placement="left" label-width="88">
+          <n-form-item label="目标节点">
+            <n-select v-model:value="transferForm.target_org_node_id" filterable :options="orgOptions" placeholder="选择目标组织节点" />
+          </n-form-item>
+          <n-form-item label="调动原因">
+            <n-input v-model:value="transferForm.reason" type="textarea" placeholder="可选，填写调动原因" :rows="2" />
+          </n-form-item>
+        </n-form>
+        <template #footer>
+          <div class="modal-actions">
+            <n-button @click="transferVisible = false">取消</n-button>
+            <n-button type="warning" :loading="transferring" @click="submitTransfer">确认调动</n-button>
           </div>
         </template>
       </n-modal>

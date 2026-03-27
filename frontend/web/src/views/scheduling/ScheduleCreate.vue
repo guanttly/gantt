@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus'
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createSchedule } from '@/api/schedules'
+import { listGroups } from '@/api/groups'
+import type { Group } from '@/api/groups'
 
 const router = useRouter()
 const loading = ref(false)
+const groups = ref<Group[]>([])
 
 const form = reactive({
   name: '',
   start_date: '',
   end_date: '',
+  group_id: '' as string | undefined,
 })
 
 const rules = {
@@ -31,7 +35,15 @@ async function handleSubmit() {
 
   loading.value = true
   try {
-    const res = await createSchedule(form)
+    const payload: Record<string, unknown> = {
+      name: form.name,
+      start_date: form.start_date,
+      end_date: form.end_date,
+    }
+    if (form.group_id) {
+      payload.group_id = form.group_id
+    }
+    const res = await createSchedule(payload as any)
     ElMessage.success('排班计划创建成功')
     await router.push(`/scheduling/${res.id}`)
   }
@@ -42,6 +54,18 @@ async function handleSubmit() {
     loading.value = false
   }
 }
+
+async function loadGroups() {
+  try {
+    const result = await listGroups()
+    groups.value = result.items
+  }
+  catch {
+    // 分组加载失败不阻断页面
+  }
+}
+
+onMounted(loadGroups)
 </script>
 
 <template>
@@ -60,6 +84,14 @@ async function handleSubmit() {
         </el-form-item>
         <el-form-item label="结束日期" prop="end_date">
           <el-date-picker v-model="form.end_date" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="排班分组">
+          <el-select v-model="form.group_id" clearable placeholder="可选，按分组排班" style="width: 100%">
+            <el-option v-for="g in groups" :key="g.id" :label="`${g.name}（${g.member_count}人）`" :value="g.id" />
+          </el-select>
+          <div v-if="form.group_id" style="font-size: 12px; color: #909399; margin-top: 4px;">
+            选择分组后，仅该分组内的成员参与排班
+          </div>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" @click="handleSubmit">

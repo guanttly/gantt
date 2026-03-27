@@ -13,13 +13,16 @@ import (
 
 // DeterministicDeps 确定性排班 Pipeline 的依赖。
 type DeterministicDeps struct {
-	RuleService  *rule.Service
-	ShiftService *shift.Service
-	EmployeeRepo *employee.Repository
-	LeaveRepo    *leave.Repository
-	DraftSaver   step.DraftSaver
-	Broadcaster  websocket.Broadcaster // 可选
-	Logger       *zap.Logger
+	RuleService         *rule.Service
+	ShiftService        *shift.Service
+	EmployeeRepo        *employee.Repository
+	LeaveRepo           *leave.Repository
+	GroupMemberProvider step.GroupMemberProvider
+	ConflictChecker     step.CrossGroupConflictChecker
+	ShiftResolver       step.ShiftTimeResolver
+	DraftSaver          step.DraftSaver
+	Broadcaster         websocket.Broadcaster // 可选
+	Logger              *zap.Logger
 }
 
 // NewDeterministicPipeline 创建确定性排班 Pipeline。
@@ -30,12 +33,17 @@ func NewDeterministicPipeline(deps *DeterministicDeps) *Pipeline {
 			ShiftService: deps.ShiftService,
 		},
 		&step.FilterCandidatesStep{
-			EmployeeRepo: deps.EmployeeRepo,
-			LeaveRepo:    deps.LeaveRepo,
+			EmployeeRepo:        deps.EmployeeRepo,
+			LeaveRepo:           deps.LeaveRepo,
+			GroupMemberProvider: deps.GroupMemberProvider,
 		},
 		&step.PhaseZeroStep{},
 		&step.PhaseOneStep{},
 		&step.PhaseTwoStep{},
+		&step.CrossGroupConflictStep{
+			ConflictChecker: deps.ConflictChecker,
+			ShiftResolver:   deps.ShiftResolver,
+		},
 		&step.FullValidationStep{},
 		&step.SaveDraftStep{
 			Repo: deps.DraftSaver,

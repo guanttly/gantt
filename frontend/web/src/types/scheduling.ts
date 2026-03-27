@@ -10,6 +10,7 @@ export interface SchedulePlan {
   name: string
   start_date: string
   end_date: string
+  group_id?: string
   status: ScheduleStatus
   created_at: string
   updated_at: string
@@ -56,6 +57,7 @@ export interface CreateScheduleRequest {
   name: string
   start_date: string
   end_date: string
+  group_id?: string
 }
 
 export interface AdjustAssignmentRequest {

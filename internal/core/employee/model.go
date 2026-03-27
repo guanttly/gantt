@@ -34,6 +34,14 @@ type Employee struct {
 	tenant.TenantModel
 }
 
+// EmployeeResponse 员工 API 响应（带组织路径信息）。
+type EmployeeResponse struct {
+	Employee
+	OrgNodeName        string `json:"org_node_name"`
+	OrgNodePathDisplay string `json:"org_node_path_display"`
+	OrgNodeType        string `json:"org_node_type"`
+}
+
 // TableName 指定表名。
 func (Employee) TableName() string {
 	return "employees"

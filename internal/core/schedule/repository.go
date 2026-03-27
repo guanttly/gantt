@@ -261,7 +261,32 @@ func (r *Repository) AutoMigrate() error {
 	return r.db.AutoMigrate(&Schedule{}, &Assignment{}, &Change{})
 }
 
+// FindAssignmentsByEmployeeAndDateRange 查询某员工在日期范围内的所有排班分配（跨所有排班计划）。
+// excludeScheduleID 可选，排除指定排班计划（避免和自身冲突）。
+func (r *Repository) FindAssignmentsByEmployeeAndDateRange(ctx context.Context, employeeID, startDate, endDate, excludeScheduleID string) ([]step.ConflictAssignment, error) {
+	var assignments []Assignment
+	tx := r.db.WithContext(tenant.SkipTenantGuard(ctx)).
+		Where("employee_id = ?", employeeID).
+		Where("date >= ? AND date <= ?", startDate, endDate)
+	if excludeScheduleID != "" {
+		tx = tx.Where("schedule_id != ?", excludeScheduleID)
+	}
+	if err := tx.Find(&assignments).Error; err != nil {
+		return nil, err
+	}
+	result := make([]step.ConflictAssignment, len(assignments))
+	for i, a := range assignments {
+		result[i] = step.ConflictAssignment{
+			EmployeeID: a.EmployeeID,
+			ShiftID:    a.ShiftID,
+			Date:       a.Date,
+		}
+	}
+	return result, nil
+}
+
 // ── 确保 Repository 实现 step 接口 ──────────────────────────────
 
 var _ step.DraftSaver = (*Repository)(nil)
 var _ step.AssignmentRepo = (*Repository)(nil)
+var _ step.CrossGroupConflictChecker = (*Repository)(nil)

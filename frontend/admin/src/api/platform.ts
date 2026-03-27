@@ -14,8 +14,19 @@ export interface PlatformEmployee {
   hire_date?: string
   app_must_reset_pwd: boolean
   app_default_password?: string
+  org_node_name?: string
+  org_node_path_display?: string
+  org_node_type?: string
   created_at: string
   updated_at: string
+}
+
+export interface TransferResult {
+  employee_id: string
+  from_org_node: { id: string, name: string, path_display: string }
+  to_org_node: { id: string, name: string, path_display: string }
+  roles_cleaned: number
+  groups_removed: number
 }
 
 export interface PlatformEmployeePayload {
@@ -326,4 +337,12 @@ export function removeEmployeeAppRole(employeeId: string, roleId: string) {
 
 export function batchAssignEmployeeAppRoles(data: BatchAssignEmployeeAppRolePayload) {
   return client.post<BatchAssignEmployeeAppRoleResponse>('/platform/employees/batch-app-roles', data).then(r => r.data)
+}
+
+export function transferEmployee(id: string, data: { target_org_node_id: string, reason?: string }) {
+  return client.post<TransferResult>(`/platform/employees/${id}/transfer`, data).then(r => r.data)
+}
+
+export function batchTransferEmployees(data: { employee_ids: string[], target_org_node_id: string, reason?: string }) {
+  return client.post<TransferResult[]>('/platform/employees/batch-transfer', data).then(r => r.data)
 }

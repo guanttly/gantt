@@ -91,7 +91,7 @@ func TestSharedFixture_PhaseZeroMatchesFixedAssignmentSemantics(t *testing.T) {
 		requirements[fixture.FixedAssignments.ShiftID][item.Date] = item.RequiredCount
 	}
 
-	state := NewScheduleState("sch-1", "org-1", fixture.FixedAssignments.Dates[0].Date, fixture.FixedAssignments.Dates[len(fixture.FixedAssignments.Dates)-1].Date, "user-1", &ScheduleConfig{
+	state := NewScheduleState("sch-1", "org-1", "", fixture.FixedAssignments.Dates[0].Date, fixture.FixedAssignments.Dates[len(fixture.FixedAssignments.Dates)-1].Date, "user-1", &ScheduleConfig{
 		ShiftIDs:     []string{fixture.FixedAssignments.ShiftID},
 		Requirements: requirements,
 	})
@@ -125,7 +125,7 @@ func TestSharedFixture_PhaseZeroMatchesFixedAssignmentSemantics(t *testing.T) {
 func TestSharedFixture_PhaseTwoAllowsUnderfill(t *testing.T) {
 	fixture := loadSharedCompatFixture(t)
 
-	state := NewScheduleState("sch-2", "org-1", fixture.Underfill.Date, fixture.Underfill.Date, "user-1", &ScheduleConfig{
+	state := NewScheduleState("sch-2", "org-1", "", fixture.Underfill.Date, fixture.Underfill.Date, "user-1", &ScheduleConfig{
 		ShiftIDs: []string{fixture.Underfill.Shift.ID},
 		Requirements: map[string]map[string]int{
 			fixture.Underfill.Shift.ID: {
@@ -156,7 +156,7 @@ func TestSharedFixture_PhaseTwoAllowsUnderfill(t *testing.T) {
 func TestSharedFixture_FullValidationChecksSourceRule(t *testing.T) {
 	fixture := loadSharedCompatFixture(t)
 
-	state := NewScheduleState("sch-3", "org-1", fixture.SourceValidation.Date, fixture.SourceValidation.Date, "user-1", nil)
+	state := NewScheduleState("sch-3", "org-1", "", fixture.SourceValidation.Date, fixture.SourceValidation.Date, "user-1", nil)
 	state.Assignments = []Assignment{
 		{
 			ID:         "a-source",
@@ -213,7 +213,7 @@ func TestSharedFixture_FullValidationChecksSourceRule(t *testing.T) {
 func TestSharedFixture_ExclusiveSemanticsAvoidDoubleBooking(t *testing.T) {
 	fixture := loadSharedCompatFixture(t)
 
-	state := NewScheduleState("sch-4", "org-1", fixture.ExclusiveSemantics.Date, fixture.ExclusiveSemantics.Date, "user-1", &ScheduleConfig{
+	state := NewScheduleState("sch-4", "org-1", "", fixture.ExclusiveSemantics.Date, fixture.ExclusiveSemantics.Date, "user-1", &ScheduleConfig{
 		ShiftIDs: fixture.ExclusiveSemantics.ShiftIDs,
 		Requirements: map[string]map[string]int{
 			fixture.ExclusiveSemantics.ShiftIDs[0]: {

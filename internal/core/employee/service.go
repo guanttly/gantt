@@ -46,12 +46,25 @@ type UpdateInput struct {
 
 // Service 员工业务逻辑层。
 type Service struct {
-	repo           *Repository
-	appRoleCleaner AppRoleCleaner
+	repo            *Repository
+	appRoleCleaner  AppRoleCleaner
+	orgNodeResolver OrgNodeResolver
+	groupCleaner    GroupCleaner
 }
 
 type AppRoleCleaner interface {
 	CleanupEmployeeRoles(ctx context.Context, employeeID string) error
+}
+
+// OrgNodeResolver 查询组织节点信息的接口。
+type OrgNodeResolver interface {
+	GetByID(ctx context.Context, id string) (*tenant.OrgNode, error)
+	GetAncestorNames(ctx context.Context, nodePath string) ([]string, error)
+}
+
+// GroupCleaner 清理员工分组关系的接口。
+type GroupCleaner interface {
+	RemoveEmployeeFromAllGroups(ctx context.Context, employeeID string) (int64, error)
 }
 
 // NewService 创建员工服务。
@@ -61,6 +74,14 @@ func NewService(repo *Repository) *Service {
 
 func (s *Service) SetAppRoleCleaner(cleaner AppRoleCleaner) {
 	s.appRoleCleaner = cleaner
+}
+
+func (s *Service) SetOrgNodeResolver(resolver OrgNodeResolver) {
+	s.orgNodeResolver = resolver
+}
+
+func (s *Service) SetGroupCleaner(cleaner GroupCleaner) {
+	s.groupCleaner = cleaner
 }
 
 // Create 创建员工。
@@ -275,4 +296,163 @@ func (s *Service) resolveTargetOrgNodeID(ctx context.Context, target *string) (s
 	}
 
 	return node.ID, nil
+}
+
+// EnrichResponse 将 Employee 转换为带组织路径信息的 EmployeeResponse。
+func (s *Service) EnrichResponse(ctx context.Context, emp *Employee) *EmployeeResponse {
+	resp := &EmployeeResponse{Employee: *emp}
+	if s.orgNodeResolver == nil {
+		return resp
+	}
+
+	node, err := s.orgNodeResolver.GetByID(ctx, emp.OrgNodeID)
+	if err != nil {
+		return resp
+	}
+
+	resp.OrgNodeName = node.Name
+	resp.OrgNodeType = node.NodeType
+
+	names, err := s.orgNodeResolver.GetAncestorNames(ctx, node.Path)
+	if err == nil && len(names) > 0 {
+		resp.OrgNodePathDisplay = strings.Join(names, " / ")
+	} else {
+		resp.OrgNodePathDisplay = node.Name
+	}
+
+	return resp
+}
+
+// EnrichResponseList 批量转换员工列表为带组织路径信息的响应。
+func (s *Service) EnrichResponseList(ctx context.Context, employees []Employee) []EmployeeResponse {
+	results := make([]EmployeeResponse, len(employees))
+	for i := range employees {
+		results[i] = *s.EnrichResponse(ctx, &employees[i])
+	}
+	return results
+}
+
+// TransferInput 员工调动的输入参数。
+type TransferInput struct {
+	TargetOrgNodeID string `json:"target_org_node_id"`
+	Reason          string `json:"reason"`
+}
+
+// TransferResult 员工调动的结果。
+type TransferResult struct {
+	EmployeeID    string      `json:"employee_id"`
+	FromOrgNode   OrgNodeInfo `json:"from_org_node"`
+	ToOrgNode     OrgNodeInfo `json:"to_org_node"`
+	RolesCleaned  int64       `json:"roles_cleaned"`
+	GroupsRemoved int64       `json:"groups_removed"`
+}
+
+// OrgNodeInfo 组织节点概要信息。
+type OrgNodeInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	PathDisplay string `json:"path_display"`
+}
+
+// Transfer 调动员工到指定科室。
+func (s *Service) Transfer(ctx context.Context, id string, input TransferInput) (*TransferResult, error) {
+	emp, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrEmployeeNotFound
+		}
+		return nil, err
+	}
+
+	if input.TargetOrgNodeID == "" {
+		return nil, fmt.Errorf("target_org_node_id 为必填项")
+	}
+	if emp.OrgNodeID == input.TargetOrgNodeID {
+		return nil, fmt.Errorf("目标科室与当前科室相同，无需调动")
+	}
+
+	// 验证目标节点存在且在管理范围内
+	targetOrgNodeID, err := s.resolveTargetOrgNodeID(ctx, &input.TargetOrgNodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 构建响应信息
+	result := &TransferResult{EmployeeID: emp.ID}
+
+	// 原科室信息
+	result.FromOrgNode = s.buildOrgNodeInfo(ctx, emp.OrgNodeID)
+
+	// 更新 org_node_id
+	originalOrgNodeID := emp.OrgNodeID
+	emp.OrgNodeID = targetOrgNodeID
+	if err := s.repo.Update(ctx, emp); err != nil {
+		return nil, fmt.Errorf("更新员工组织节点失败: %w", err)
+	}
+
+	// 清除原科室的应用角色
+	if s.appRoleCleaner != nil && originalOrgNodeID != emp.OrgNodeID {
+		if err := s.appRoleCleaner.CleanupEmployeeRoles(ctx, emp.ID); err != nil {
+			return nil, err
+		}
+	}
+
+	// 清除原科室的分组成员关系
+	if s.groupCleaner != nil {
+		removed, err := s.groupCleaner.RemoveEmployeeFromAllGroups(ctx, emp.ID)
+		if err != nil {
+			return nil, err
+		}
+		result.GroupsRemoved = removed
+	}
+
+	// 目标科室信息
+	result.ToOrgNode = s.buildOrgNodeInfo(ctx, targetOrgNodeID)
+
+	return result, nil
+}
+
+// BatchTransferInput 批量调动的输入参数。
+type BatchTransferInput struct {
+	EmployeeIDs     []string `json:"employee_ids"`
+	TargetOrgNodeID string   `json:"target_org_node_id"`
+	Reason          string   `json:"reason"`
+}
+
+// BatchTransfer 批量调动员工。
+func (s *Service) BatchTransfer(ctx context.Context, input BatchTransferInput) ([]TransferResult, error) {
+	if len(input.EmployeeIDs) == 0 {
+		return nil, fmt.Errorf("employee_ids 不能为空")
+	}
+	results := make([]TransferResult, 0, len(input.EmployeeIDs))
+	for _, empID := range input.EmployeeIDs {
+		result, err := s.Transfer(ctx, empID, TransferInput{
+			TargetOrgNodeID: input.TargetOrgNodeID,
+			Reason:          input.Reason,
+		})
+		if err != nil {
+			return results, fmt.Errorf("调动员工 %s 失败: %w", empID, err)
+		}
+		results = append(results, *result)
+	}
+	return results, nil
+}
+
+func (s *Service) buildOrgNodeInfo(ctx context.Context, orgNodeID string) OrgNodeInfo {
+	info := OrgNodeInfo{ID: orgNodeID}
+	if s.orgNodeResolver == nil {
+		return info
+	}
+	node, err := s.orgNodeResolver.GetByID(ctx, orgNodeID)
+	if err != nil {
+		return info
+	}
+	info.Name = node.Name
+	names, err := s.orgNodeResolver.GetAncestorNames(ctx, node.Path)
+	if err == nil && len(names) > 0 {
+		info.PathDisplay = strings.Join(names, " / ")
+	} else {
+		info.PathDisplay = node.Name
+	}
+	return info
 }

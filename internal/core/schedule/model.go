@@ -27,6 +27,7 @@ const (
 type Schedule struct {
 	ID           string          `gorm:"primaryKey;size:64" json:"id"`
 	Name         string          `gorm:"size:128;not null" json:"name"`
+	GroupID      *string         `gorm:"size:64;index:idx_schedules_group" json:"group_id"`
 	StartDate    string          `gorm:"size:10;not null" json:"start_date"`
 	EndDate      string          `gorm:"size:10;not null" json:"end_date"`
 	Status       string          `gorm:"size:16;not null;default:draft" json:"status"`

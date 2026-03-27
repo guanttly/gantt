@@ -162,12 +162,15 @@ func initDependencies(
 	employeeRepo := employee.NewRepository(db)
 	employeeSvc := employee.NewService(employeeRepo)
 	employeeSvc.SetAppRoleCleaner(appRoleSvc)
+	employeeSvc.SetOrgNodeResolver(tenantSvc)
 	employeeHandler := employee.NewHandler(employeeSvc)
 
 	groupRepo := group.NewRepository(db)
 	groupSvc := group.NewService(groupRepo)
 	groupSvc.SetAppRoleSyncer(appRoleSvc)
 	groupHandler := group.NewHandler(groupSvc)
+
+	employeeSvc.SetGroupCleaner(groupSvc)
 
 	shiftRepo := shift.NewRepository(db)
 	shiftSvc := shift.NewService(shiftRepo)
@@ -184,6 +187,8 @@ func initDependencies(
 	scheduleRepo := schedule.NewRepository(db)
 	scheduleSvc := schedule.NewService(scheduleRepo, ruleSvc, shiftSvc, employeeRepo, leaveRepo, logger)
 	scheduleSvc.SetBroadcaster(hub)
+	scheduleSvc.SetGroupMemberProvider(groupSvc)
+	scheduleSvc.SetOrgNodeResolver(tenantSvc)
 	scheduleHandler := schedule.NewHandler(scheduleSvc)
 
 	quotaRepo := quota.NewRepository(db)

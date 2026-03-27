@@ -28,7 +28,7 @@ func TestPhaseZeroStep_AppliesFixedScheduleRule(t *testing.T) {
 			},
 		},
 	}
-	state := NewScheduleState("sch-1", "org-1", "2026-03-23", "2026-03-24", "user-1", config)
+	state := NewScheduleState("sch-1", "org-1", "", "2026-03-23", "2026-03-24", "user-1", config)
 	state.ShiftOrder = makeShifts("day")
 	state.EffectiveRules = []rule.Rule{
 		{
@@ -79,7 +79,7 @@ func TestPhaseOneStep_ExclusiveRulesMatchLegacyExpectation(t *testing.T) {
 			"night": {"2026-03-23": 1},
 		},
 	}
-	state := NewScheduleState("sch-1", "org-1", "2026-03-23", "2026-03-23", "user-1", config)
+	state := NewScheduleState("sch-1", "org-1", "", "2026-03-23", "2026-03-23", "user-1", config)
 	state.ShiftOrder = makeShifts("day", "night")
 	state.Candidates["day|2026-03-23"] = []string{"e1", "e2", "e3"}
 	state.Candidates["night|2026-03-23"] = []string{"e1", "e2", "e3"}
@@ -116,7 +116,7 @@ func TestPhaseOneStep_SourceRulesMatchLegacyExpectation(t *testing.T) {
 			"night": {"2026-03-23": 2},
 		},
 	}
-	state := NewScheduleState("sch-1", "org-1", "2026-03-23", "2026-03-23", "user-1", config)
+	state := NewScheduleState("sch-1", "org-1", "", "2026-03-23", "2026-03-23", "user-1", config)
 	state.ShiftOrder = makeShifts("day", "night")
 	state.Candidates["night|2026-03-23"] = []string{"e1", "e2", "e3"}
 	state.Assignments = []Assignment{
@@ -154,7 +154,7 @@ func TestPhaseTwoStep_AllowsUnderfillWithoutErrorLikeLegacyDefaultScheduler(t *t
 			"night": {"2026-03-23": 3},
 		},
 	}
-	state := NewScheduleState("sch-1", "org-1", "2026-03-23", "2026-03-23", "user-1", config)
+	state := NewScheduleState("sch-1", "org-1", "", "2026-03-23", "2026-03-23", "user-1", config)
 	state.ShiftOrder = makeShifts("night")
 	state.Candidates["night|2026-03-23"] = []string{"e1", "e2"}
 
@@ -175,7 +175,7 @@ func TestPhaseTwoStep_AllowsUnderfillWithoutErrorLikeLegacyDefaultScheduler(t *t
 }
 
 func TestFullValidationStep_FindsExclusiveConflictsLikeLegacyValidator(t *testing.T) {
-	state := NewScheduleState("sch-1", "org-1", "2026-03-23", "2026-03-23", "user-1", nil)
+	state := NewScheduleState("sch-1", "org-1", "", "2026-03-23", "2026-03-23", "user-1", nil)
 	state.Assignments = []Assignment{
 		{ID: "a1", EmployeeID: "e1", ShiftID: "day", Date: "2026-03-23", Source: SourceRule},
 		{ID: "a2", EmployeeID: "e1", ShiftID: "night", Date: "2026-03-23", Source: SourceFill},

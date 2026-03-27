@@ -29,11 +29,13 @@ var (
 	ErrCannotPublish      = errors.New("当前状态不允许发布排班")
 	ErrCannotAdjust       = errors.New("当前状态不允许调整排班")
 	ErrAssignmentNotFound = errors.New("排班分配不存在")
+	ErrNotLeafNode        = errors.New("只有科室级（department）节点才能创建排班")
 )
 
 // CreateInput 创建排班计划的输入参数。
 type CreateInput struct {
 	Name         string          `json:"name"`
+	GroupID      *string         `json:"group_id"`
 	StartDate    string          `json:"start_date"`
 	EndDate      string          `json:"end_date"`
 	PipelineType string          `json:"pipeline_type"`
@@ -42,14 +44,21 @@ type CreateInput struct {
 
 // Service 排班业务逻辑层。
 type Service struct {
-	repo         *Repository
-	ruleService  *rule.Service
-	shiftService *shift.Service
-	employeeRepo *employee.Repository
-	leaveRepo    *leave.Repository
-	aiProvider   ai.Provider           // 可选，为 nil 时不支持 AI 排班
-	broadcaster  websocket.Broadcaster // 可选，为 nil 时不推送 WS
-	logger       *zap.Logger
+	repo                *Repository
+	ruleService         *rule.Service
+	shiftService        *shift.Service
+	employeeRepo        *employee.Repository
+	leaveRepo           *leave.Repository
+	groupMemberProvider step.GroupMemberProvider
+	orgNodeResolver     OrgNodeTypeChecker
+	aiProvider          ai.Provider           // 可选，为 nil 时不支持 AI 排班
+	broadcaster         websocket.Broadcaster // 可选，为 nil 时不推送 WS
+	logger              *zap.Logger
+}
+
+// OrgNodeTypeChecker 检查组织节点类型的接口。
+type OrgNodeTypeChecker interface {
+	GetByID(ctx context.Context, id string) (*tenant.OrgNode, error)
 }
 
 // NewService 创建排班服务。
@@ -81,11 +90,32 @@ func (s *Service) SetBroadcaster(b websocket.Broadcaster) {
 	s.broadcaster = b
 }
 
+// SetGroupMemberProvider 设置分组成员查询器（可选）。
+func (s *Service) SetGroupMemberProvider(p step.GroupMemberProvider) {
+	s.groupMemberProvider = p
+}
+
+// SetOrgNodeResolver 设置组织节点查询器（可选）。
+func (s *Service) SetOrgNodeResolver(r OrgNodeTypeChecker) {
+	s.orgNodeResolver = r
+}
+
 // Create 创建排班计划。
 func (s *Service) Create(ctx context.Context, input CreateInput) (*Schedule, error) {
 	orgNodeID := tenant.GetOrgNodeID(ctx)
 	if orgNodeID == "" {
 		return nil, fmt.Errorf("缺少组织节点信息")
+	}
+
+	// 检查是否为叶子节点（department）
+	if s.orgNodeResolver != nil {
+		node, err := s.orgNodeResolver.GetByID(ctx, orgNodeID)
+		if err != nil {
+			return nil, fmt.Errorf("查询组织节点失败: %w", err)
+		}
+		if !tenant.IsLeafNodeType(node.NodeType) {
+			return nil, ErrNotLeafNode
+		}
 	}
 
 	if input.Name == "" {
@@ -106,6 +136,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*Schedule, err
 	sch := &Schedule{
 		ID:           uuid.New().String(),
 		Name:         input.Name,
+		GroupID:      input.GroupID,
 		StartDate:    input.StartDate,
 		EndDate:      input.EndDate,
 		Status:       StatusDraft,
@@ -176,9 +207,14 @@ func (s *Service) Generate(ctx context.Context, id string) (*GenerateResult, err
 	}
 
 	// 创建 Pipeline 共享状态
+	groupID := ""
+	if sch.GroupID != nil {
+		groupID = *sch.GroupID
+	}
 	state := step.NewScheduleState(
 		sch.ID,
 		sch.TenantModel.OrgNodeID,
+		groupID,
 		sch.StartDate,
 		sch.EndDate,
 		sch.CreatedBy,
@@ -211,13 +247,16 @@ func (s *Service) Generate(ctx context.Context, id string) (*GenerateResult, err
 		})
 	} else {
 		p = pipeline.NewDeterministicPipeline(&pipeline.DeterministicDeps{
-			RuleService:  s.ruleService,
-			ShiftService: s.shiftService,
-			EmployeeRepo: s.employeeRepo,
-			LeaveRepo:    s.leaveRepo,
-			DraftSaver:   s.repo,
-			Broadcaster:  s.broadcaster,
-			Logger:       s.logger,
+			RuleService:         s.ruleService,
+			ShiftService:        s.shiftService,
+			EmployeeRepo:        s.employeeRepo,
+			LeaveRepo:           s.leaveRepo,
+			GroupMemberProvider: s.groupMemberProvider,
+			ConflictChecker:     s.repo,
+			ShiftResolver:       s.shiftService,
+			DraftSaver:          s.repo,
+			Broadcaster:         s.broadcaster,
+			Logger:              s.logger,
 		})
 	}
 
@@ -290,9 +329,14 @@ func (s *Service) AdjustAssignments(ctx context.Context, scheduleID string, inpu
 	}
 
 	// 创建 Pipeline 共享状态
+	adjGroupID := ""
+	if sch.GroupID != nil {
+		adjGroupID = *sch.GroupID
+	}
 	state := step.NewScheduleState(
 		sch.ID,
 		sch.TenantModel.OrgNodeID,
+		adjGroupID,
 		sch.StartDate,
 		sch.EndDate,
 		sch.CreatedBy,
@@ -348,9 +392,14 @@ func (s *Service) Validate(ctx context.Context, scheduleID string) (*GenerateRes
 	}
 
 	// 创建状态并只运行校验
+	valGroupID := ""
+	if sch.GroupID != nil {
+		valGroupID = *sch.GroupID
+	}
 	state := step.NewScheduleState(
 		sch.ID,
 		sch.TenantModel.OrgNodeID,
+		valGroupID,
 		sch.StartDate,
 		sch.EndDate,
 		sch.CreatedBy,
