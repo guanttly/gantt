@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 
-	"gantt-saas/internal/auth"
 	"gantt-saas/internal/common/response"
 
 	"github.com/go-chi/chi/v5"
@@ -16,21 +15,17 @@ type Handler struct {
 	svc *Service
 }
 
-type disableRuleInput struct {
-	Reason string `json:"reason"`
-}
-
 // NewHandler 创建规则处理器。
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
 }
 
-// List 查询规则列表（含继承标记）。
+// List 查询规则列表。
 // GET /api/v1/rules
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	rules, err := h.svc.List(r.Context())
 	if err != nil {
-		response.InternalError(w, "查询规则列表失败")
+		h.handleError(w, err)
 		return
 	}
 	response.OK(w, rules)
@@ -41,7 +36,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetEffective(w http.ResponseWriter, r *http.Request) {
 	effective, err := h.svc.ListEffective(r.Context())
 	if err != nil {
-		response.InternalError(w, "计算生效规则失败")
+		h.handleError(w, err)
 		return
 	}
 	response.OK(w, effective)
@@ -95,40 +90,6 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, rl)
 }
 
-// DisableInherited 禁用上级继承规则。
-// PUT /api/v1/rules/:id/disable
-func (h *Handler) DisableInherited(w http.ResponseWriter, r *http.Request) {
-	var input disableRuleInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		response.BadRequest(w, "请求参数格式错误")
-		return
-	}
-
-	actorUserID := ""
-	if claims := auth.GetClaims(r.Context()); claims != nil {
-		actorUserID = claims.UserID
-	}
-
-	rl, err := h.svc.DisableInherited(r.Context(), chi.URLParam(r, "id"), input.Reason, actorUserID)
-	if err != nil {
-		h.handleError(w, err)
-		return
-	}
-
-	response.OK(w, rl)
-}
-
-// RestoreInheritance 恢复继承规则。
-// PUT /api/v1/rules/:id/restore
-func (h *Handler) RestoreInheritance(w http.ResponseWriter, r *http.Request) {
-	if err := h.svc.RestoreInheritance(r.Context(), chi.URLParam(r, "id")); err != nil {
-		h.handleError(w, err)
-		return
-	}
-
-	response.OK(w, map[string]string{"status": "restored"})
-}
-
 // Delete 删除规则。
 // DELETE /api/v1/rules/:id
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +120,6 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 // Validate 校验规则是否冲突。
 // POST /api/v1/rules/validate
 func (h *Handler) Validate(w http.ResponseWriter, r *http.Request) {
-	// 阶段二完成后与排班管道集成
 	response.OK(w, map[string]string{"status": "not_implemented"})
 }
 
@@ -175,20 +135,10 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrRuleNameDup):
 		response.Conflict(w, err.Error())
-	case errors.Is(err, ErrOverrideNotFound):
-		response.NotFound(w, err.Error())
-	case errors.Is(err, ErrCannotOverride):
+	case errors.Is(err, ErrOverrideNotSupported):
 		response.BadRequest(w, err.Error())
-	case errors.Is(err, ErrInvalidDisableReason):
-		response.BadRequest(w, err.Error())
-	case errors.Is(err, ErrCannotDisable):
-		response.BadRequest(w, err.Error())
-	case errors.Is(err, ErrRuleAlreadyDisabled):
-		response.Conflict(w, err.Error())
-	case errors.Is(err, ErrRuleAlreadyOverridden):
-		response.Conflict(w, err.Error())
-	case errors.Is(err, ErrNothingToRestore):
-		response.NotFound(w, err.Error())
+	case errors.Is(err, ErrNotDeptNode):
+		response.Forbidden(w, err.Error())
 	default:
 		response.InternalError(w, "内部错误")
 	}

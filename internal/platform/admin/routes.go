@@ -27,6 +27,8 @@ func RegisterPlatformUserRoutes(r chi.Router, userHandler *PlatformUserHandler) 
 		r.Post("/", userHandler.Create)
 		r.Get("/{id}", userHandler.GetByID)
 		r.Put("/{id}/reset-pwd", userHandler.ResetPassword)
+		r.Put("/{id}/enable", userHandler.Enable)
 		r.Put("/{id}/disable", userHandler.Disable)
+		r.Delete("/{id}", userHandler.Delete)
 	})
 }

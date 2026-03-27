@@ -2,10 +2,14 @@
 import type { Rule, RuleCategory, RuleType } from '@/types/rule'
 import { Delete, Edit, Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { createRule, deleteRule, listRules, updateRule } from '@/api/rules'
 import { usePagination } from '@/composables/usePagination'
+import { useAuthStore } from '@/stores/auth'
 import { RULE_CATEGORY_OPTIONS, RULE_TYPE_OPTIONS } from '@/types/rule'
+
+const auth = useAuthStore()
+const canManageRules = computed(() => auth.hasPermission('rule:manage'))
 
 const { loading, items, total, currentPage, currentPageSize, keyword, handlePageChange, handleSizeChange, refresh } = usePagination<Rule>({
   fetchFn: listRules,
@@ -130,7 +134,7 @@ async function handleDelete(row: Rule) {
         style="width: 240px"
         :prefix-icon="Search"
       />
-      <el-button type="primary" :icon="Plus" @click="handleAdd">
+      <el-button v-if="canManageRules" type="primary" :icon="Plus" @click="handleAdd">
         新增规则
       </el-button>
     </div>
@@ -157,23 +161,20 @@ async function handleDelete(row: Rule) {
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="inherited" label="来源" width="120">
-        <template #default="{ row }">
-          <el-tag v-if="row.inherited" type="warning" size="small">
-            继承: {{ row.source_node_name }}
-          </el-tag>
-          <el-tag v-else type="" size="small">
-            本节点
+      <el-table-column label="作用域" width="120">
+        <template #default>
+          <el-tag size="small">
+            本科室
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="description" label="描述" />
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column v-if="canManageRules" label="操作" width="160" fixed="right">
         <template #default="{ row }">
-          <el-button :icon="Edit" link type="primary" :disabled="row.inherited" @click="handleEdit(row)">
+          <el-button :icon="Edit" link type="primary" @click="handleEdit(row)">
             编辑
           </el-button>
-          <el-button :icon="Delete" link type="danger" :disabled="row.inherited" @click="handleDelete(row)">
+          <el-button :icon="Delete" link type="danger" @click="handleDelete(row)">
             删除
           </el-button>
         </template>

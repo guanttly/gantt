@@ -11,20 +11,24 @@ import (
 )
 
 var (
-	ErrNodeNotFound     = errors.New("组织节点不存在")
-	ErrNodeSuspended    = errors.New("组织节点已停用")
-	ErrCodeDuplicate    = errors.New("同级节点编码已存在")
-	ErrInvalidNodeType  = errors.New("无效的节点类型")
-	ErrInvalidRootType  = errors.New("根组织仅允许使用机构类型")
-	ErrCannotDeleteRoot = errors.New("不能删除有子节点的节点")
-	ErrProtectedNode    = errors.New("平台管理根节点不允许删除")
-	ErrInvalidHierarchy = errors.New("不允许的层级关系")
+	ErrNodeNotFound                 = errors.New("组织节点不存在")
+	ErrNodeSuspended                = errors.New("组织节点已停用")
+	ErrCodeDuplicate                = errors.New("同级节点编码已存在")
+	ErrInvalidNodeType              = errors.New("无效的节点类型")
+	ErrInvalidRootType              = errors.New("根组织仅允许使用机构类型")
+	ErrCannotDeleteRoot             = errors.New("不能删除有子节点的节点")
+	ErrProtectedNode                = errors.New("平台管理根节点不允许删除")
+	ErrManageScopeDenied            = errors.New("目标资源不在当前管理范围内")
+	ErrCannotDeleteCurrentScopeRoot = errors.New("当前管理根节点不允许删除")
+	ErrCannotMoveCurrentScopeRoot   = errors.New("当前管理根节点不允许移动")
+	ErrInvalidHierarchy             = errors.New("不允许的层级关系")
 )
 
 // allowedChildTypes 定义行政架构的固定层级关系。
 var allowedChildTypes = map[string][]string{
-	NodeTypeOrganization: {NodeTypeCampus, NodeTypeDepartment},
-	NodeTypeCampus:       {NodeTypeDepartment},
+	NodeTypeOrganization: {NodeTypeCampus, NodeTypeDepartment, NodeTypeCustom},
+	NodeTypeCampus:       {NodeTypeDepartment, NodeTypeCustom},
+	NodeTypeCustom:       {NodeTypeDepartment, NodeTypeCustom},
 	NodeTypeDepartment:   {}, // 科室是叶子节点，不能建下级
 }
 
@@ -101,15 +105,19 @@ func (s *Service) Create(ctx context.Context, input CreateNodeInput) (*OrgNode, 
 		if !parent.IsActive() {
 			return nil, ErrNodeSuspended
 		}
-		// 校验层级关系（custom 类型跳过层级检查）
-		if input.NodeType != NodeTypeCustom {
-			if err := validateNodeHierarchy(parent.NodeType, input.NodeType); err != nil {
-				return nil, err
-			}
+		if err := s.ensureNodeInScope(ctx, parent); err != nil {
+			return nil, err
+		}
+		// 校验层级关系
+		if err := validateNodeHierarchy(parent.NodeType, input.NodeType); err != nil {
+			return nil, err
 		}
 		node.Path = parent.Path + "/" + node.ID
 		node.Depth = parent.Depth + 1
 	} else {
+		if !hasGlobalManageScope(ctx) {
+			return nil, ErrManageScopeDenied
+		}
 		// 顶级节点
 		node.ParentID = nil
 		node.Path = "/" + node.ID
@@ -142,6 +150,9 @@ func (s *Service) GetByID(ctx context.Context, id string) (*OrgNode, error) {
 		}
 		return nil, err
 	}
+	if err := s.ensureNodeInScope(ctx, node); err != nil {
+		return nil, err
+	}
 	return node, nil
 }
 
@@ -152,6 +163,9 @@ func (s *Service) Update(ctx context.Context, id string, input UpdateNodeInput) 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNodeNotFound
 		}
+		return nil, err
+	}
+	if err := s.ensureNodeInScope(ctx, node); err != nil {
 		return nil, err
 	}
 
@@ -178,6 +192,9 @@ func (s *Service) Suspend(ctx context.Context, id string) error {
 		}
 		return err
 	}
+	if err := s.ensureNodeInScope(ctx, node); err != nil {
+		return err
+	}
 
 	return s.repo.UpdateStatusByPath(ctx, node.Path, StatusSuspended)
 }
@@ -191,12 +208,25 @@ func (s *Service) Activate(ctx context.Context, id string) error {
 		}
 		return err
 	}
+	if err := s.ensureNodeInScope(ctx, node); err != nil {
+		return err
+	}
 
 	return s.repo.UpdateStatusByPath(ctx, node.Path, StatusActive)
 }
 
 // GetChildren 获取直接子节点列表。
 func (s *Service) GetChildren(ctx context.Context, parentID string) ([]OrgNode, error) {
+	parent, err := s.repo.GetByID(ctx, parentID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNodeNotFound
+		}
+		return nil, err
+	}
+	if err := s.ensureNodeInScope(ctx, parent); err != nil {
+		return nil, err
+	}
 	return s.repo.GetChildren(ctx, parentID)
 }
 
@@ -207,6 +237,9 @@ func (s *Service) GetTree(ctx context.Context, rootID string) (*OrgNodeTree, err
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNodeNotFound
 		}
+		return nil, err
+	}
+	if err := s.ensureNodeInScope(ctx, root); err != nil {
 		return nil, err
 	}
 
@@ -220,6 +253,18 @@ func (s *Service) GetTree(ctx context.Context, rootID string) (*OrgNodeTree, err
 
 // GetRootTrees 获取所有顶级节点及其完整子树。
 func (s *Service) GetRootTrees(ctx context.Context) ([]*OrgNodeTree, error) {
+	if !hasGlobalManageScope(ctx) {
+		scopeNodeID := GetOrgNodeID(ctx)
+		if scopeNodeID == "" {
+			return nil, ErrManageScopeDenied
+		}
+		tree, err := s.GetTree(ctx, scopeNodeID)
+		if err != nil {
+			return nil, err
+		}
+		return []*OrgNodeTree{tree}, nil
+	}
+
 	roots, err := s.repo.GetRootNodes(ctx)
 	if err != nil {
 		return nil, err
@@ -253,9 +298,15 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 		}
 		return err
 	}
+	if err := s.ensureNodeInScope(ctx, node); err != nil {
+		return err
+	}
 
 	if isProtectedNode(node) {
 		return ErrProtectedNode
+	}
+	if !hasGlobalManageScope(ctx) && id == currentManageRootID(ctx) {
+		return ErrCannotDeleteCurrentScopeRoot
 	}
 
 	// 检查是否有子节点
@@ -302,6 +353,9 @@ func (s *Service) Move(ctx context.Context, id string, input MoveNodeInput) (*Or
 		}
 		return nil, err
 	}
+	if err := s.ensureNodeInScope(ctx, node); err != nil {
+		return nil, err
+	}
 
 	newParent, err := s.repo.GetByID(ctx, input.NewParentID)
 	if err != nil {
@@ -310,9 +364,15 @@ func (s *Service) Move(ctx context.Context, id string, input MoveNodeInput) (*Or
 		}
 		return nil, err
 	}
+	if err := s.ensureNodeInScope(ctx, newParent); err != nil {
+		return nil, err
+	}
 
 	if !newParent.IsActive() {
 		return nil, ErrNodeSuspended
+	}
+	if !hasGlobalManageScope(ctx) && id == currentManageRootID(ctx) {
+		return nil, ErrCannotMoveCurrentScopeRoot
 	}
 
 	// 检查同级 code 唯一
@@ -382,6 +442,42 @@ func (s *Service) GetAncestorNames(ctx context.Context, nodePath string) ([]stri
 		}
 	}
 	return names, nil
+}
+
+func hasGlobalManageScope(ctx context.Context) bool {
+	scopeID := strings.TrimSpace(GetOrgNodeID(ctx))
+	scopePath := strings.TrimRight(GetOrgNodePath(ctx), "/")
+	if scopeID == "" && scopePath == "" {
+		return true
+	}
+	return scopeID == protectedPlatformRootCode || scopePath == "/"+protectedPlatformRootCode
+}
+
+func currentManageRootID(ctx context.Context) string {
+	scopeID := strings.TrimSpace(GetOrgNodeID(ctx))
+	if scopeID != "" {
+		return scopeID
+	}
+	scopePath := strings.Trim(strings.TrimSpace(GetOrgNodePath(ctx)), "/")
+	if scopePath == "" {
+		return ""
+	}
+	parts := strings.Split(scopePath, "/")
+	return parts[len(parts)-1]
+}
+
+func (s *Service) ensureNodeInScope(ctx context.Context, node *OrgNode) error {
+	if node == nil || hasGlobalManageScope(ctx) {
+		return nil
+	}
+	scopePath := strings.TrimRight(GetOrgNodePath(ctx), "/")
+	if scopePath == "" {
+		return nil
+	}
+	if node.Path == scopePath || strings.HasPrefix(node.Path, scopePath+"/") {
+		return nil
+	}
+	return ErrManageScopeDenied
 }
 
 // buildTree 将扁平列表构建为树结构。

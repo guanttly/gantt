@@ -150,6 +150,8 @@ func (h *Handler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, ErrNotDeptNode):
+		response.Forbidden(w, err.Error())
 	case errors.Is(err, ErrGroupNotFound):
 		response.NotFound(w, err.Error())
 	case errors.Is(err, ErrMemberExists):

@@ -4,7 +4,8 @@ import type { OrgTreeNode } from '@/api/org'
 import { computed, onMounted, ref } from 'vue'
 import { NButton, NForm, NFormItem, NInput, NModal, NSelect, NSpin, NTag, useDialog, useMessage } from 'naive-ui'
 import { getOrgTree } from '@/api/org'
-import { createPlatformUser, disablePlatformUser, listPlatformUsers, resetPlatformUserPassword } from '@/api/platform'
+import { createPlatformUser, deletePlatformUser, disablePlatformUser, enablePlatformUser, listPlatformUsers, resetPlatformUserPassword } from '@/api/platform'
+import { useAuthStore } from '@/stores/auth'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -14,18 +15,18 @@ const selectedOrgNodeId = ref<string | null>(null)
 const dialogVisible = ref(false)
 const message = useMessage()
 const dialog = useDialog()
+const auth = useAuthStore()
 
 const form = ref<CreatePlatformUserPayload>({
   username: '',
   email: '',
   phone: '',
   org_node_id: '',
-  role_name: 'dept_admin',
+  role_name: 'org_admin',
 })
 
 const roleOptions = [
   { label: '机构管理员', value: 'org_admin' },
-  { label: '科室管理员', value: 'dept_admin' },
 ]
 
 const orgOptions = computed(() => flattenOrgTree(orgTree.value))
@@ -57,7 +58,7 @@ function openCreate() {
     email: '',
     phone: '',
     org_node_id: selectedOrgNodeId.value || '',
-    role_name: 'dept_admin',
+    role_name: 'org_admin',
   }
   dialogVisible.value = true
 }
@@ -123,6 +124,38 @@ function disableUser(user: PlatformUser) {
   })
 }
 
+function enableUser(user: PlatformUser) {
+  dialog.info({
+    title: '启用平台账号',
+    content: `确定启用 ${user.username}？`,
+    positiveText: '启用',
+    negativeText: '取消',
+    async onPositiveClick() {
+      await enablePlatformUser(user.id)
+      message.success('账号已启用')
+      await loadUsers()
+    },
+  })
+}
+
+function deleteUser(user: PlatformUser) {
+  dialog.warning({
+    title: '删除平台账号',
+    content: `确定删除 ${user.username}？该操作不可撤销。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    async onPositiveClick() {
+      await deletePlatformUser(user.id)
+      message.success('账号已删除')
+      await loadUsers()
+    },
+  })
+}
+
+function canMutateUser(user: PlatformUser) {
+  return auth.user?.id !== user.id
+}
+
 onMounted(async () => {
   await loadOrgTree()
   await loadUsers()
@@ -135,7 +168,7 @@ onMounted(async () => {
       <section class="page-header">
         <div>
           <h2 class="page-title">平台账号</h2>
-          <p class="page-subtitle">管理机构管理员与科室管理员账号，支持发放默认密码和强制改密。</p>
+          <p class="page-subtitle">管理平台与机构后台账号，支持发放默认密码和强制改密。</p>
         </div>
       </section>
 
@@ -144,7 +177,7 @@ onMounted(async () => {
           <n-select v-model:value="selectedOrgNodeId" clearable filterable placeholder="按组织节点筛选" :options="orgOptions" style="width: 320px" @update:value="loadUsers" />
         </div>
         <div class="toolbar-right">
-          <n-button type="primary" @click="openCreate">新增平台账号</n-button>
+          <n-button type="primary" @click="openCreate">新增后台账号</n-button>
         </div>
       </section>
 
@@ -176,7 +209,9 @@ onMounted(async () => {
                   <td>
                     <div class="table-actions">
                       <n-button text type="primary" @click="resetPassword(item)">重置密码</n-button>
-                      <n-button v-if="item.status === 'active'" text type="error" @click="disableUser(item)">禁用</n-button>
+                      <n-button v-if="item.status === 'active' && canMutateUser(item)" text type="error" @click="disableUser(item)">禁用</n-button>
+                      <n-button v-if="item.status !== 'active' && canMutateUser(item)" text type="primary" @click="enableUser(item)">启用</n-button>
+                      <n-button v-if="item.status !== 'active' && canMutateUser(item)" text type="error" @click="deleteUser(item)">删除</n-button>
                     </div>
                   </td>
                 </tr>
@@ -189,7 +224,7 @@ onMounted(async () => {
         </div>
       </section>
 
-      <n-modal v-model:show="dialogVisible" preset="card" title="新增平台账号" style="width: min(520px, calc(100vw - 32px))">
+      <n-modal v-model:show="dialogVisible" preset="card" title="新增后台账号" style="width: min(520px, calc(100vw - 32px))">
         <n-form :model="form" label-placement="left" label-width="96">
           <n-form-item label="用户名">
             <n-input v-model:value="form.username" placeholder="输入登录用户名" />

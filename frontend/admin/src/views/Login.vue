@@ -22,6 +22,10 @@ const rules: FormRules = {
 }
 
 async function handleLogin() {
+	if (loading.value) {
+		return
+	}
+
   try {
     await formRef.value?.validate()
   }
@@ -33,9 +37,9 @@ async function handleLogin() {
   try {
     const res = await auth.login(form.username, form.password)
 
-    if (![RoleName.PlatformAdmin, RoleName.OrgAdmin, RoleName.DeptAdmin].includes(auth.currentRole)) {
+    if (![RoleName.PlatformAdmin, RoleName.OrgAdmin].includes(auth.currentRole)) {
       auth.logout()
-      message.error('仅限平台管理账号登录')
+      message.error('仅限管理后台账号登录')
       return
     }
 
@@ -63,11 +67,11 @@ async function handleLogin() {
     <div class="auth-panel">
       <section class="auth-brand">
         <div class="auth-brand-content">
-          <span class="auth-brand-badge">平台管理后台</span>
-          <h2 class="auth-brand-title">平台统一管理</h2>
-          <p class="auth-brand-lead">租户、订阅与系统配置</p>
+          <span class="auth-brand-badge">管理后台</span>
+          <h2 class="auth-brand-title">统一管理入口</h2>
+          <p class="auth-brand-lead">平台与机构后台账号统一入口</p>
           <p class="auth-brand-copy">
-            这里集中处理平台级运营与治理事务。登录后可查看机构运营状态、维护系统配置，并管理跨租户能力。
+            登录后系统会根据当前身份展示对应的管理视图。这里仅用于平台管理员与机构管理员处理行政管理，不承载科室排班业务。
           </p>
         </div>
       </section>
@@ -75,7 +79,7 @@ async function handleLogin() {
       <section class="auth-card">
         <div class="auth-card-header">
           <h1>登录管理后台</h1>
-          <p>平台管理员、机构管理员、科室管理员可访问。首次登录如使用默认口令，系统会强制要求重置密码。</p>
+          <p>仅平台管理员、机构管理员可访问。首次登录如使用默认口令，系统会强制要求重置密码。</p>
         </div>
 
         <n-form
@@ -83,10 +87,10 @@ async function handleLogin() {
           :model="form"
           :rules="rules"
           class="auth-form"
-          @keyup.enter="handleLogin"
+          @submit.prevent="handleLogin"
         >
           <n-form-item path="username">
-            <n-input v-model:value="form.username" placeholder="用户名" size="large" clearable>
+            <n-input v-model:value="form.username" :disabled="loading" placeholder="用户名" size="large" clearable>
               <template #prefix>
                 <n-icon :size="18" color="#94a3b8">
                   <person-outline />
@@ -95,7 +99,7 @@ async function handleLogin() {
             </n-input>
           </n-form-item>
           <n-form-item path="password">
-            <n-input v-model:value="form.password" type="password" placeholder="密码" size="large" show-password-on="click">
+            <n-input v-model:value="form.password" :disabled="loading" type="password" placeholder="密码" size="large" show-password-on="click">
               <template #prefix>
                 <n-icon :size="18" color="#94a3b8">
                   <lock-closed-outline />
@@ -104,7 +108,7 @@ async function handleLogin() {
             </n-input>
           </n-form-item>
           <n-form-item>
-            <n-button type="primary" size="large" :loading="loading" class="auth-submit" block @click="handleLogin">登录</n-button>
+            <n-button type="primary" attr-type="submit" size="large" :loading="loading" class="auth-submit" block>登录</n-button>
           </n-form-item>
         </n-form>
       </section>

@@ -67,6 +67,7 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 func (r *Repository) List(ctx context.Context) ([]Rule, error) {
 	var rules []Rule
 	err := tenant.ApplyScope(ctx, r.db.WithContext(ctx)).
+		Where("disabled = ?", false).
 		Order("category ASC, priority ASC").
 		Find(&rules).Error
 	return rules, err
@@ -76,7 +77,7 @@ func (r *Repository) List(ctx context.Context) ([]Rule, error) {
 func (r *Repository) ListByNodeID(ctx context.Context, nodeID string) ([]Rule, error) {
 	var rules []Rule
 	err := r.db.WithContext(ctx).
-		Where("org_node_id = ? AND is_enabled = ?", nodeID, true).
+		Where("org_node_id = ? AND is_enabled = ? AND disabled = ?", nodeID, true, false).
 		Order("category ASC, priority ASC").
 		Find(&rules).Error
 	return rules, err

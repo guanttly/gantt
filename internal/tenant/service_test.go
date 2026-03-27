@@ -2,6 +2,7 @@ package tenant
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -324,6 +325,80 @@ func TestService_Create_RootNodeMustBeOrganization(t *testing.T) {
 	}
 }
 
+func TestService_Create_CustomNodeCanCreateDepartment(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatalf("打开测试数据库失败: %v", err)
+	}
+
+	if err := db.AutoMigrate(&OrgNode{}); err != nil {
+		t.Fatalf("迁移 org_nodes 失败: %v", err)
+	}
+
+	repo := NewRepository(db)
+	svc := NewService(repo)
+	ctx := context.Background()
+
+	root := &OrgNode{ID: "org-1", NodeType: NodeTypeOrganization, Name: "鼓楼医院", Code: "gulou", Path: "/org-1", Depth: 0, Status: StatusActive}
+	customParentID := root.ID
+	custom := &OrgNode{ID: "custom-1", ParentID: &customParentID, NodeType: NodeTypeCustom, Name: "自定义组", Code: "custom-1", Path: "/org-1/custom-1", Depth: 1, Status: StatusActive}
+	for _, node := range []*OrgNode{root, custom} {
+		if err := repo.Create(ctx, node); err != nil {
+			t.Fatalf("创建测试节点失败: %v", err)
+		}
+	}
+
+	created, err := svc.Create(ctx, CreateNodeInput{
+		ParentID: &custom.ID,
+		NodeType: NodeTypeDepartment,
+		Name:     "放射科",
+		Code:     "dept-radiology",
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if created.ParentID == nil || *created.ParentID != custom.ID {
+		t.Fatalf("parent_id = %v, want %q", created.ParentID, custom.ID)
+	}
+	if created.NodeType != NodeTypeDepartment {
+		t.Fatalf("node_type = %q, want %q", created.NodeType, NodeTypeDepartment)
+	}
+}
+
+func TestService_Create_DepartmentCannotCreateChild(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatalf("打开测试数据库失败: %v", err)
+	}
+
+	if err := db.AutoMigrate(&OrgNode{}); err != nil {
+		t.Fatalf("迁移 org_nodes 失败: %v", err)
+	}
+
+	repo := NewRepository(db)
+	svc := NewService(repo)
+	ctx := context.Background()
+
+	root := &OrgNode{ID: "org-1", NodeType: NodeTypeOrganization, Name: "鼓楼医院", Code: "gulou", Path: "/org-1", Depth: 0, Status: StatusActive}
+	deptParentID := root.ID
+	dept := &OrgNode{ID: "dept-1", ParentID: &deptParentID, NodeType: NodeTypeDepartment, Name: "心内科", Code: "dept-1", Path: "/org-1/dept-1", Depth: 1, Status: StatusActive}
+	for _, node := range []*OrgNode{root, dept} {
+		if err := repo.Create(ctx, node); err != nil {
+			t.Fatalf("创建测试节点失败: %v", err)
+		}
+	}
+
+	_, err = svc.Create(ctx, CreateNodeInput{
+		ParentID: &dept.ID,
+		NodeType: NodeTypeDepartment,
+		Name:     "二级科室",
+		Code:     "dept-child",
+	})
+	if !errors.Is(err, ErrInvalidHierarchy) {
+		t.Fatalf("Create() error = %v, want %v", err, ErrInvalidHierarchy)
+	}
+}
+
 func TestService_GetRootTrees_IncludesChildren(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
@@ -378,5 +453,175 @@ func TestService_GetRootTrees_IncludesChildren(t *testing.T) {
 	}
 	if trees[0].Children[0].Code != "dept-cardiology" {
 		t.Fatalf("child code = %q, want %q", trees[0].Children[0].Code, "dept-cardiology")
+	}
+}
+
+func TestService_GetRootTrees_ScopedToCurrentNode(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatalf("打开测试数据库失败: %v", err)
+	}
+
+	if err := db.AutoMigrate(&OrgNode{}); err != nil {
+		t.Fatalf("迁移 org_nodes 失败: %v", err)
+	}
+
+	repo := NewRepository(db)
+	svc := NewService(repo)
+	ctx := context.Background()
+
+	rootA := &OrgNode{
+		ID:       "root-a",
+		NodeType: NodeTypeOrganization,
+		Name:     "鼓楼医院",
+		Code:     "gulou-root",
+		Path:     "/root-a",
+		Depth:    0,
+		Status:   StatusActive,
+	}
+	childParentID := rootA.ID
+	child := &OrgNode{
+		ID:       "dept-a",
+		ParentID: &childParentID,
+		NodeType: NodeTypeDepartment,
+		Name:     "心内科",
+		Code:     "dept-cardiology",
+		Path:     "/root-a/dept-a",
+		Depth:    1,
+		Status:   StatusActive,
+	}
+	rootB := &OrgNode{
+		ID:       "root-b",
+		NodeType: NodeTypeOrganization,
+		Name:     "鼓楼医院仙林院区",
+		Code:     "xianlin-root",
+		Path:     "/root-b",
+		Depth:    0,
+		Status:   StatusActive,
+	}
+
+	for _, node := range []*OrgNode{rootA, child, rootB} {
+		if err := repo.Create(ctx, node); err != nil {
+			t.Fatalf("创建测试节点失败: %v", err)
+		}
+	}
+
+	scopedCtx := WithOrgNode(context.Background(), rootA.ID, rootA.Path)
+	trees, err := svc.GetRootTrees(scopedCtx)
+	if err != nil {
+		t.Fatalf("GetRootTrees() error = %v", err)
+	}
+	if len(trees) != 1 {
+		t.Fatalf("scoped root tree count = %d, want 1", len(trees))
+	}
+	if trees[0].ID != rootA.ID {
+		t.Fatalf("scoped root id = %q, want %q", trees[0].ID, rootA.ID)
+	}
+	if len(trees[0].Children) != 1 || trees[0].Children[0].ID != child.ID {
+		t.Fatalf("scoped root children = %+v, want child %q", trees[0].Children, child.ID)
+	}
+	if trees[0].Code == rootB.Code {
+		t.Fatalf("unexpected out-of-scope root returned: %q", rootB.Code)
+	}
+}
+
+func TestService_Delete_CurrentScopeRootDenied(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatalf("打开测试数据库失败: %v", err)
+	}
+
+	if err := db.AutoMigrate(&OrgNode{}); err != nil {
+		t.Fatalf("迁移 org_nodes 失败: %v", err)
+	}
+
+	repo := NewRepository(db)
+	svc := NewService(repo)
+	root := &OrgNode{
+		ID:       "root-1",
+		NodeType: NodeTypeOrganization,
+		Name:     "鼓楼医院",
+		Code:     "gulou-root",
+		Path:     "/root-1",
+		Depth:    0,
+		Status:   StatusActive,
+	}
+
+	ctx := context.Background()
+	if err := repo.Create(ctx, root); err != nil {
+		t.Fatalf("创建根节点失败: %v", err)
+	}
+
+	scopedCtx := WithOrgNode(context.Background(), root.ID, root.Path)
+	err = svc.Delete(scopedCtx, root.ID)
+	if err != ErrCannotDeleteCurrentScopeRoot {
+		t.Fatalf("Delete() error = %v, want %v", err, ErrCannotDeleteCurrentScopeRoot)
+	}
+
+	stored, err := repo.GetByID(ctx, root.ID)
+	if err != nil {
+		t.Fatalf("当前管理根节点不应被删除: %v", err)
+	}
+	if stored.ID != root.ID {
+		t.Fatalf("保留节点 ID = %q, want %q", stored.ID, root.ID)
+	}
+}
+
+func TestService_Move_CurrentScopeRootDenied(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatalf("打开测试数据库失败: %v", err)
+	}
+
+	if err := db.AutoMigrate(&OrgNode{}); err != nil {
+		t.Fatalf("迁移 org_nodes 失败: %v", err)
+	}
+
+	repo := NewRepository(db)
+	svc := NewService(repo)
+	ctx := context.Background()
+
+	root := &OrgNode{
+		ID:       "root-1",
+		NodeType: NodeTypeOrganization,
+		Name:     "鼓楼医院",
+		Code:     "gulou-root",
+		Path:     "/root-1",
+		Depth:    0,
+		Status:   StatusActive,
+	}
+	deptParentID := root.ID
+	dept := &OrgNode{
+		ID:       "dept-1",
+		ParentID: &deptParentID,
+		NodeType: NodeTypeDepartment,
+		Name:     "心内科",
+		Code:     "dept-cardiology",
+		Path:     "/root-1/dept-1",
+		Depth:    1,
+		Status:   StatusActive,
+	}
+
+	for _, node := range []*OrgNode{root, dept} {
+		if err := repo.Create(ctx, node); err != nil {
+			t.Fatalf("创建测试节点失败: %v", err)
+		}
+	}
+
+	scopedCtx := WithOrgNode(context.Background(), root.ID, root.Path)
+	_, err = svc.Move(scopedCtx, root.ID, MoveNodeInput{NewParentID: dept.ID})
+	if err != ErrCannotMoveCurrentScopeRoot {
+		t.Fatalf("Move() error = %v, want %v", err, ErrCannotMoveCurrentScopeRoot)
+	}
+
+	stored, err := repo.GetByID(ctx, root.ID)
+	if err != nil {
+		t.Fatalf("当前管理根节点不应被移动: %v", err)
+	}
+	if stored.ParentID != nil {
+		t.Fatalf("root parent_id = %v, want nil", *stored.ParentID)
+	}
+	if stored.Path != root.Path {
+		t.Fatalf("root path = %q, want %q", stored.Path, root.Path)
 	}
 }

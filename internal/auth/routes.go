@@ -13,6 +13,10 @@ func RegisterPublicRoutes(r chi.Router, h *Handler) {
 	})
 }
 
+func RegisterAdminPublicRoutes(r chi.Router, h *Handler) {
+	r.Post("/admin/auth/login", h.AdminLogin)
+}
+
 func RegisterAppPublicRoutes(r chi.Router, h *AppHandler) {
 	r.Route("/app/scheduling/auth", func(r chi.Router) {
 		r.Post("/login", h.Login)

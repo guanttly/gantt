@@ -11,6 +11,10 @@ import (
 
 type claimsContextKey struct{}
 
+func WithClaims(ctx context.Context, claims *Claims) context.Context {
+	return context.WithValue(ctx, claimsContextKey{}, claims)
+}
+
 // AuthMiddleware JWT 认证中间件。
 // 从 Authorization Header 提取 Bearer Token，验证后将 Claims 写入 Context。
 // 同时将 OrgNodeID / OrgNodePath 写入 tenant Context，供后续中间件/handler 使用。
@@ -42,7 +46,7 @@ func AuthMiddleware(jwtMgr *JWTManager) func(next http.Handler) http.Handler {
 			}
 
 			// 将 Claims 写入 Context
-			ctx := context.WithValue(r.Context(), claimsContextKey{}, claims)
+			ctx := WithClaims(r.Context(), claims)
 
 			// 将组织节点信息写入 tenant Context
 			ctx = tenant.WithOrgNode(ctx, claims.OrgNodeID, claims.OrgNodePath)

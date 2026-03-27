@@ -2,6 +2,7 @@ package approle
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -163,6 +164,16 @@ func TestService_MyRolesAndPermissions(t *testing.T) {
 	if len(permissions.Permissions) == 0 {
 		t.Fatal("permissions 不应为空")
 	}
+	for _, permission := range []string{"group:view:node", "shift:view:node", "schedule:create"} {
+		if !slices.Contains(permissions.Permissions, permission) {
+			t.Fatalf("permissions 缺少 %s: %+v", permission, permissions.Permissions)
+		}
+	}
+	for _, forbidden := range []string{"group:manage", "shift:manage", "rule:manage"} {
+		if slices.Contains(permissions.Permissions, forbidden) {
+			t.Fatalf("scheduler 不应包含 %s: %+v", forbidden, permissions.Permissions)
+		}
+	}
 
 	directRoles, err := svc.MyRoles(ctx, "emp-001")
 	if err != nil {
@@ -170,6 +181,31 @@ func TestService_MyRolesAndPermissions(t *testing.T) {
 	}
 	if directRoles.EmployeeID != "emp-001" {
 		t.Fatalf("employee_token employee_id = %s, want emp-001", directRoles.EmployeeID)
+	}
+}
+
+func TestService_ScheduleAdminPermissions(t *testing.T) {
+	svc, db, _, dept := setupAppRoleService(t)
+	ctx := tenant.WithOrgNode(context.Background(), dept.ID, dept.Path)
+	if err := db.Exec(`INSERT INTO employees (id, org_node_id, name, status) VALUES ('emp-002', ?, '李四', 'active')`, dept.ID).Error; err != nil {
+		t.Fatalf("创建测试员工失败: %v", err)
+	}
+	if err := db.Exec(`INSERT INTO platform_users (id, bound_employee_id) VALUES ('user-002', 'emp-002')`).Error; err != nil {
+		t.Fatalf("创建测试平台账号失败: %v", err)
+	}
+	_, err := svc.AssignEmployeeRole(ctx, "emp-002", AssignEmployeeRoleInput{AppRole: RoleScheduleAdmin, OrgNodeID: dept.ID}, "platform-user-1")
+	if err != nil {
+		t.Fatalf("AssignEmployeeRole() error = %v", err)
+	}
+
+	permissions, err := svc.MyPermissions(ctx, "user-002")
+	if err != nil {
+		t.Fatalf("MyPermissions() error = %v", err)
+	}
+	for _, permission := range []string{"app-role:manage", "group:manage", "shift:manage", "rule:manage", "schedule:publish"} {
+		if !slices.Contains(permissions.Permissions, permission) {
+			t.Fatalf("schedule_admin 缺少 %s: %+v", permission, permissions.Permissions)
+		}
 	}
 }
 

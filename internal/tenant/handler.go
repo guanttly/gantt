@@ -38,7 +38,7 @@ func (h *Handler) GetTree(w http.ResponseWriter, r *http.Request) {
 	// 无 root_id 返回所有顶级节点及其完整子树
 	nodes, err := h.svc.GetRootTrees(r.Context())
 	if err != nil {
-		response.InternalError(w, "查询组织树失败")
+		h.handleError(w, err)
 		return
 	}
 	response.OK(w, nodes)
@@ -120,7 +120,7 @@ func (h *Handler) GetChildren(w http.ResponseWriter, r *http.Request) {
 
 	children, err := h.svc.GetChildren(r.Context(), id)
 	if err != nil {
-		response.InternalError(w, "查询子节点失败")
+		h.handleError(w, err)
 		return
 	}
 
@@ -191,9 +191,17 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrInvalidRootType):
 		response.BadRequest(w, err.Error())
+	case errors.Is(err, ErrInvalidHierarchy):
+		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrCannotDeleteRoot):
 		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrProtectedNode):
+		response.Forbidden(w, err.Error())
+	case errors.Is(err, ErrManageScopeDenied):
+		response.Forbidden(w, err.Error())
+	case errors.Is(err, ErrCannotDeleteCurrentScopeRoot):
+		response.Forbidden(w, err.Error())
+	case errors.Is(err, ErrCannotMoveCurrentScopeRoot):
 		response.Forbidden(w, err.Error())
 	default:
 		response.InternalError(w, "内部错误")

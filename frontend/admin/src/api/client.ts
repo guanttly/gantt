@@ -26,6 +26,13 @@ function unwrapSuccessResponse<T>(payload: T | WrappedSuccessResponse<T>): T {
   return payload as T
 }
 
+function isAuthEntryRequest(url?: string): boolean {
+  if (!url) {
+    return false
+  }
+  return url.includes('/admin/auth/login') || url.includes('/auth/refresh')
+}
+
 function extractErrorMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== 'object') {
     return null
@@ -93,6 +100,10 @@ client.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
+
+    if (isAuthEntryRequest(originalRequest?.url)) {
+      return Promise.reject(error)
+    }
 
     if (error.response?.status !== 401 || originalRequest._retry) {
       const msg = extractErrorMessage(error.response?.data) || '请求失败'

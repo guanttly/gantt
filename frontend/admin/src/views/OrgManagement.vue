@@ -3,17 +3,21 @@ import type { OrgNodeType, OrgTreeNode } from '@/api/org'
 import { computed, onMounted, ref } from 'vue'
 import { NButton, NForm, NFormItem, NInput, NModal, NSelect, NSpin, useDialog, useMessage } from 'naive-ui'
 import OrgTreeBranch from '@/components/OrgTreeBranch.vue'
-import { createOrgNode, deleteOrgNode, getOrgTree, isProtectedOrgNode, updateOrgNode } from '@/api/org'
+import { canCreateChildNode, createOrgNode, deleteOrgNode, getAllowedChildNodeTypes, getOrgTree, isProtectedOrgNode, updateOrgNode } from '@/api/org'
+import { useAuthStore } from '@/stores/auth'
+import { RoleName } from '@/types/auth'
 
 const loading = ref(true)
 const treeData = ref<OrgTreeNode[]>([])
 const filterText = ref('')
 const message = useMessage()
 const dialog = useDialog()
+const auth = useAuthStore()
 
 const dialogVisible = ref(false)
 const dialogTitle = ref('')
 const editingId = ref<string | null>(null)
+const addParentType = ref<OrgNodeType | null>(null)
 const form = ref({
   name: '',
   code: '',
@@ -28,12 +32,52 @@ const nodeTypeOptions = [
   { label: '自定义', value: 'custom' },
 ]
 
-const rootNodeTypeOptions = nodeTypeOptions.filter(option => option.value === 'organization')
-const childNodeTypeOptions = nodeTypeOptions.filter(option => option.value !== 'organization')
-
 const availableNodeTypeOptions = computed(() => {
-  return form.value.parent_id ? childNodeTypeOptions : rootNodeTypeOptions
+  if (!form.value.parent_id || !addParentType.value) {
+    return nodeTypeOptions.filter(option => option.value === 'organization')
+  }
+  const allowedTypes = new Set(getAllowedChildNodeTypes(addParentType.value))
+  return nodeTypeOptions.filter(option => allowedTypes.has(option.value as OrgNodeType))
 })
+
+const isPlatformAdmin = computed(() => auth.currentRole === RoleName.PlatformAdmin)
+
+const scopedTreeData = computed(() => {
+  if (isPlatformAdmin.value || !auth.currentNode?.node_id)
+    return treeData.value
+
+  const targetId = auth.currentNode.node_id
+  const matchNode = (nodes: OrgTreeNode[]): OrgTreeNode | null => {
+    for (const node of nodes) {
+      if (node.id === targetId)
+        return node
+      const childMatch = matchNode(node.children || [])
+      if (childMatch)
+        return childMatch
+    }
+    return null
+  }
+
+  const root = matchNode(treeData.value)
+  return root ? [root] : []
+})
+
+const currentManagedRoot = computed(() => scopedTreeData.value[0])
+const nonDeletableNodeIds = computed(() => {
+  if (isPlatformAdmin.value || !currentManagedRoot.value?.id)
+    return []
+  return [currentManagedRoot.value.id]
+})
+
+const pageTitle = computed(() => isPlatformAdmin.value ? '机构管理' : '组织管理')
+const pageSubtitle = computed(() => {
+  if (isPlatformAdmin.value)
+    return '维护平台组织树结构，支持新增机构、层级扩展和基础名称编辑。'
+  const name = auth.currentNode?.node_name || '当前机构'
+  return `维护 ${name} 的院区与科室结构，支持创建下级节点并绑定员工到具体科室。`
+})
+
+const createButtonLabel = computed(() => isPlatformAdmin.value ? '新建根组织' : '新建下级节点')
 
 async function loadTree() {
   loading.value = true
@@ -49,14 +93,30 @@ async function loadTree() {
 }
 
 function handleAdd(parent?: OrgTreeNode) {
+  if (!isPlatformAdmin.value && !parent) {
+    parent = currentManagedRoot.value
+  }
+  if (parent && !canCreateChildNode(parent)) {
+    message.warning('当前节点不允许创建下级节点')
+    return
+  }
   editingId.value = null
+  addParentType.value = parent?.node_type ?? null
   dialogTitle.value = parent ? `新建子组织 - ${parent.name}` : '新建根组织'
-  form.value = { name: '', code: '', node_type: parent ? 'department' : 'organization', parent_id: parent?.id }
+  form.value = {
+    name: '',
+    code: '',
+    node_type: parent && addParentType.value
+      ? getAllowedChildNodeTypes(addParentType.value)[0] || 'department'
+      : 'organization',
+    parent_id: parent?.id,
+  }
   dialogVisible.value = true
 }
 
 function handleEdit(node: OrgTreeNode) {
   editingId.value = node.id
+  addParentType.value = null
   dialogTitle.value = '编辑组织'
   form.value = { name: node.name, code: node.code, node_type: node.node_type, parent_id: undefined }
   dialogVisible.value = true
@@ -65,6 +125,10 @@ function handleEdit(node: OrgTreeNode) {
 async function handleDelete(node: OrgTreeNode) {
   if (isProtectedOrgNode(node)) {
     message.warning('平台管理根节点不允许删除')
+    return
+  }
+  if (nonDeletableNodeIds.value.includes(node.id)) {
+    message.warning('当前管理根节点不允许删除')
     return
   }
 
@@ -111,6 +175,7 @@ async function handleSubmit() {
     }
     message.success('操作成功')
     dialogVisible.value = false
+    addParentType.value = null
     loadTree()
   }
   catch (e: any) {
@@ -126,8 +191,8 @@ onMounted(loadTree)
     <div class="page-container">
       <section class="page-header">
         <div>
-          <h2 class="page-title">机构管理</h2>
-          <p class="page-subtitle">维护平台组织树结构，支持新增根节点、层级扩展和基础名称编辑。</p>
+          <h2 class="page-title">{{ pageTitle }}</h2>
+          <p class="page-subtitle">{{ pageSubtitle }}</p>
         </div>
       </section>
 
@@ -136,7 +201,7 @@ onMounted(loadTree)
           <n-input v-model:value="filterText" clearable placeholder="搜索组织名称或编码" style="width: 260px" />
         </div>
         <div class="toolbar-right">
-          <n-button type="primary" @click="handleAdd()">新建根组织</n-button>
+          <n-button type="primary" @click="handleAdd()">{{ createButtonLabel }}</n-button>
         </div>
       </section>
 
@@ -149,10 +214,11 @@ onMounted(loadTree)
 
             <div class="tree-wrapper">
               <OrgTreeBranch
-                v-if="treeData.length"
+                v-if="scopedTreeData.length"
                 class="tree-root"
-                :nodes="treeData"
+                :nodes="scopedTreeData"
                 :filter-text="filterText"
+                :non-deletable-node-ids="nonDeletableNodeIds"
                 @add="handleAdd"
                 @edit="handleEdit"
                 @delete="handleDelete"

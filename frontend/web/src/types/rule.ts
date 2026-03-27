@@ -14,11 +14,8 @@ export interface Rule {
   enabled: boolean
   rule_data: string
   config: Record<string, unknown>
-  /** 是否继承自上级节点 */
-  inherited: boolean
-  /** 来源节点 ID（继承时） */
+  inherited?: boolean
   source_node_id?: string
-  /** 来源节点名（继承时） */
   source_node_name?: string
   description?: string
   /** 关联统计 */
@@ -133,7 +130,6 @@ export interface ValidateRuleResponse {
 
 /** 生效规则查询参数 */
 export interface EffectiveRulesParams {
-  include_inherited?: boolean
 }
 
 // ==================== AI 规则解析 ====================

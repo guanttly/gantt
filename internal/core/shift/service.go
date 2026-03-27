@@ -17,6 +17,7 @@ var (
 	ErrCyclicDep      = errors.New("班次依赖存在循环")
 	ErrSelfDep        = errors.New("班次不能依赖自身")
 	ErrInvalidDepType = errors.New("无效的依赖类型")
+	ErrNotDeptNode    = errors.New("只有科室级（department）节点可以管理班次")
 )
 
 // CreateInput 创建班次的输入参数。
@@ -52,7 +53,12 @@ type DependencyInput struct {
 
 // Service 班次业务逻辑层。
 type Service struct {
-	repo *Repository
+	repo            *Repository
+	orgNodeResolver OrgNodeTypeChecker
+}
+
+type OrgNodeTypeChecker interface {
+	GetByID(ctx context.Context, id string) (*tenant.OrgNode, error)
 }
 
 // NewService 创建班次服务。
@@ -60,8 +66,34 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
+func (s *Service) SetOrgNodeResolver(resolver OrgNodeTypeChecker) {
+	s.orgNodeResolver = resolver
+}
+
+func (s *Service) ensureDepartmentNode(ctx context.Context) error {
+	orgNodeID := tenant.GetOrgNodeID(ctx)
+	if orgNodeID == "" {
+		return fmt.Errorf("缺少组织节点信息")
+	}
+	if s.orgNodeResolver == nil {
+		return nil
+	}
+	node, err := s.orgNodeResolver.GetByID(ctx, orgNodeID)
+	if err != nil {
+		return fmt.Errorf("查询组织节点失败: %w", err)
+	}
+	if !tenant.IsLeafNodeType(node.NodeType) {
+		return ErrNotDeptNode
+	}
+	return nil
+}
+
 // Create 创建班次。
 func (s *Service) Create(ctx context.Context, input CreateInput) (*Shift, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	orgNodeID := tenant.GetOrgNodeID(ctx)
 	if orgNodeID == "" {
 		return nil, fmt.Errorf("缺少组织节点信息")
@@ -106,6 +138,10 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*Shift, error)
 
 // GetByID 获取班次详情。
 func (s *Service) GetByID(ctx context.Context, id string) (*Shift, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	sh, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -118,6 +154,10 @@ func (s *Service) GetByID(ctx context.Context, id string) (*Shift, error) {
 
 // Update 更新班次信息。
 func (s *Service) Update(ctx context.Context, id string, input UpdateInput) (*Shift, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	sh, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -160,6 +200,10 @@ func (s *Service) Update(ctx context.Context, id string, input UpdateInput) (*Sh
 
 // ToggleStatus 切换班次启用状态。
 func (s *Service) ToggleStatus(ctx context.Context, id string) (*Shift, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	sh, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -183,6 +227,10 @@ func (s *Service) ToggleStatus(ctx context.Context, id string) (*Shift, error) {
 
 // Delete 删除班次。
 func (s *Service) Delete(ctx context.Context, id string) error {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return err
+	}
+
 	_, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -199,6 +247,10 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 
 // List 查询班次列表。
 func (s *Service) List(ctx context.Context) ([]Shift, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	return s.repo.List(ctx)
 }
 
@@ -218,11 +270,19 @@ func (s *Service) ListAvailable(ctx context.Context) ([]Shift, error) {
 
 // GetDependencies 查询依赖关系列表。
 func (s *Service) GetDependencies(ctx context.Context) ([]ShiftDependency, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	return s.repo.GetDependencies(ctx)
 }
 
 // AddDependency 添加班次依赖。
 func (s *Service) AddDependency(ctx context.Context, input DependencyInput) (*ShiftDependency, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	if input.ShiftID == input.DependsOnID {
 		return nil, ErrSelfDep
 	}
@@ -270,6 +330,10 @@ func (s *Service) AddDependency(ctx context.Context, input DependencyInput) (*Sh
 
 // GetTopologicalOrder 获取班次的拓扑排序（供排班引擎使用）。
 func (s *Service) GetTopologicalOrder(ctx context.Context) ([]Shift, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	shifts, err := s.repo.List(ctx)
 	if err != nil {
 		return nil, err

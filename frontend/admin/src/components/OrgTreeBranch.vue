@@ -3,7 +3,7 @@ import type { OrgTreeNode } from '@/api/org'
 import { AddOutline, CaretDownOutline, CaretForwardOutline, CreateOutline, TrashOutline } from '@vicons/ionicons5'
 import { computed, ref, watch } from 'vue'
 import { NButton, NIcon, NTag } from 'naive-ui'
-import { ORG_NODE_TYPE_LABELS, isProtectedOrgNode } from '@/api/org'
+import { ORG_NODE_TYPE_LABELS, canCreateChildNode, isProtectedOrgNode } from '@/api/org'
 
 defineOptions({ name: 'OrgTreeBranch' })
 
@@ -11,6 +11,7 @@ const props = defineProps<{
   nodes: OrgTreeNode[]
   filterText: string
   depth?: number
+  nonDeletableNodeIds?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -65,6 +66,14 @@ function handleEdit(node: OrgTreeNode) {
 
 function handleDelete(node: OrgTreeNode) {
   emit('delete', node)
+}
+
+function canAdd(node: OrgTreeNode) {
+  return canCreateChildNode(node)
+}
+
+function canDelete(node: OrgTreeNode) {
+  return !isProtectedOrgNode(node) && !(props.nonDeletableNodeIds || []).includes(node.id)
 }
 
 function getNodeTypeLabel(node: OrgTreeNode) {
@@ -122,7 +131,7 @@ function toggleExpanded(node: OrgTreeNode) {
           </div>
         </div>
         <div class="node-actions">
-          <n-button quaternary circle size="small" @click.stop="handleAdd(node)">
+          <n-button v-if="canAdd(node)" quaternary circle size="small" @click.stop="handleAdd(node)">
             <template #icon>
               <n-icon><AddOutline /></n-icon>
             </template>
@@ -132,7 +141,7 @@ function toggleExpanded(node: OrgTreeNode) {
               <n-icon><CreateOutline /></n-icon>
             </template>
           </n-button>
-          <n-button v-if="!isProtectedOrgNode(node)" quaternary circle size="small" type="error" @click.stop="handleDelete(node)">
+          <n-button v-if="canDelete(node)" quaternary circle size="small" type="error" @click.stop="handleDelete(node)">
             <template #icon>
               <n-icon><TrashOutline /></n-icon>
             </template>
@@ -145,6 +154,7 @@ function toggleExpanded(node: OrgTreeNode) {
         :nodes="node.children"
         :filter-text="filterText"
         :depth="currentDepth + 1"
+        :non-deletable-node-ids="nonDeletableNodeIds"
         @add="handleAdd"
         @edit="handleEdit"
         @delete="handleDelete"

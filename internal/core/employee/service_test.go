@@ -123,6 +123,50 @@ func TestService_CreateGeneratesAppCredentials(t *testing.T) {
 	}
 }
 
+func TestService_ResetPassword_RegeneratesAppCredentials(t *testing.T) {
+	svc, db, node := setupEmployeeService(t)
+	ctx := tenant.WithOrgNode(context.Background(), node.ID, node.Path)
+	empNo := "E2001"
+	oldHash, err := bcrypt.GenerateFromPassword([]byte("OldPass1"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("生成旧密码哈希失败: %v", err)
+	}
+	emp := Employee{
+		ID:              "emp-reset-001",
+		Name:            "赵六",
+		EmployeeNo:      &empNo,
+		AppPasswordHash: &[]string{string(oldHash)}[0],
+		AppMustResetPwd: false,
+		Status:          StatusActive,
+		TenantModel:     tenant.TenantModel{OrgNodeID: node.ID},
+	}
+	if err := db.Create(&emp).Error; err != nil {
+		t.Fatalf("创建测试员工失败: %v", err)
+	}
+
+	result, err := svc.ResetPassword(ctx, emp.ID)
+	if err != nil {
+		t.Fatalf("ResetPassword() error = %v", err)
+	}
+	if result.DefaultPassword != "E2001@App1" {
+		t.Fatalf("default_password = %q, want %q", result.DefaultPassword, "E2001@App1")
+	}
+	if !result.MustResetPwd {
+		t.Fatal("重置应用密码后必须强制改密")
+	}
+
+	updated, err := svc.GetByID(ctx, emp.ID)
+	if err != nil {
+		t.Fatalf("GetByID() error = %v", err)
+	}
+	if updated.AppPasswordHash == nil || bcrypt.CompareHashAndPassword([]byte(*updated.AppPasswordHash), []byte(result.DefaultPassword)) != nil {
+		t.Fatal("重置后的应用密码哈希与默认密码不匹配")
+	}
+	if !updated.AppMustResetPwd {
+		t.Fatal("重置后的员工必须处于强制改密状态")
+	}
+}
+
 func TestService_Create_AllowsDescendantOrgNode(t *testing.T) {
 	svc, _, node := setupEmployeeService(t)
 	ctx := tenant.WithOrgNode(context.Background(), "org-001", "/org-001")
@@ -177,5 +221,69 @@ func TestService_Create_RejectsOutOfScopeOrgNode(t *testing.T) {
 	}
 	if !errors.Is(err, ErrEmployeeNodeOutOfScope) {
 		t.Fatalf("error = %v, want ErrEmployeeNodeOutOfScope", err)
+	}
+}
+
+func TestService_Create_RejectsNonDepartmentOrgNode(t *testing.T) {
+	svc, _, _ := setupEmployeeService(t)
+	ctx := tenant.WithScopeTree(tenant.WithOrgNode(context.Background(), "org-001", "/org-001"), true)
+	targetNodeID := "org-001"
+
+	_, err := svc.Create(ctx, CreateInput{Name: "机构级员工", OrgNodeID: &targetNodeID})
+	if !errors.Is(err, ErrEmployeeNodeMustBeDepartment) {
+		t.Fatalf("error = %v, want ErrEmployeeNodeMustBeDepartment", err)
+	}
+}
+
+func TestService_Create_DefaultCurrentNodeMustBeDepartment(t *testing.T) {
+	svc, _, _ := setupEmployeeService(t)
+	ctx := tenant.WithScopeTree(tenant.WithOrgNode(context.Background(), "org-001", "/org-001"), true)
+
+	_, err := svc.Create(ctx, CreateInput{Name: "未选科室员工"})
+	if !errors.Is(err, ErrEmployeeNodeMustBeDepartment) {
+		t.Fatalf("error = %v, want ErrEmployeeNodeMustBeDepartment", err)
+	}
+}
+
+func TestService_Update_RejectsNonDepartmentOrgNode(t *testing.T) {
+	svc, db, node := setupEmployeeService(t)
+	ctx := tenant.WithScopeTree(tenant.WithOrgNode(context.Background(), "org-001", "/org-001"), true)
+	emp := Employee{ID: "emp-update-org", Name: "张三", Status: StatusActive, TenantModel: tenant.TenantModel{OrgNodeID: node.ID}}
+	if err := db.Create(&emp).Error; err != nil {
+		t.Fatalf("创建测试员工失败: %v", err)
+	}
+	targetNodeID := "org-001"
+
+	_, err := svc.Update(ctx, emp.ID, UpdateInput{OrgNodeID: &targetNodeID})
+	if !errors.Is(err, ErrEmployeeNodeMustBeDepartment) {
+		t.Fatalf("error = %v, want ErrEmployeeNodeMustBeDepartment", err)
+	}
+}
+
+func TestService_Transfer_RejectsNonDepartmentTarget(t *testing.T) {
+	svc, db, node := setupEmployeeService(t)
+	ctx := tenant.WithScopeTree(tenant.WithOrgNode(context.Background(), "org-001", "/org-001"), true)
+	emp := Employee{ID: "emp-transfer-org", Name: "李四", Status: StatusActive, TenantModel: tenant.TenantModel{OrgNodeID: node.ID}}
+	if err := db.Create(&emp).Error; err != nil {
+		t.Fatalf("创建测试员工失败: %v", err)
+	}
+
+	_, err := svc.Transfer(ctx, emp.ID, TransferInput{TargetOrgNodeID: "org-001"})
+	if !errors.Is(err, ErrEmployeeNodeMustBeDepartment) {
+		t.Fatalf("error = %v, want ErrEmployeeNodeMustBeDepartment", err)
+	}
+}
+
+func TestService_Transfer_RejectsSameDepartment(t *testing.T) {
+	svc, db, node := setupEmployeeService(t)
+	ctx := tenant.WithScopeTree(tenant.WithOrgNode(context.Background(), "org-001", "/org-001"), true)
+	emp := Employee{ID: "emp-transfer-same", Name: "王五", Status: StatusActive, TenantModel: tenant.TenantModel{OrgNodeID: node.ID}}
+	if err := db.Create(&emp).Error; err != nil {
+		t.Fatalf("创建测试员工失败: %v", err)
+	}
+
+	_, err := svc.Transfer(ctx, emp.ID, TransferInput{TargetOrgNodeID: node.ID})
+	if !errors.Is(err, ErrEmployeeSameDepartment) {
+		t.Fatalf("error = %v, want ErrEmployeeSameDepartment", err)
 	}
 }

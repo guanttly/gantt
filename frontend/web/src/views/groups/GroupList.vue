@@ -2,9 +2,13 @@
 import type { Group } from '@/api/groups'
 import { Delete, Edit, Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { createGroup, deleteGroup, listGroups, updateGroup } from '@/api/groups'
 import { usePagination } from '@/composables/usePagination'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
+const canManageGroups = computed(() => auth.hasPermission('group:manage'))
 
 const { loading, items, total, currentPage, currentPageSize, keyword, handlePageChange, handleSizeChange, refresh } = usePagination<Group>({
   fetchFn: listGroups,
@@ -85,7 +89,7 @@ async function handleDelete(row: Group) {
   <div class="page-container">
     <div class="page-toolbar">
       <el-input v-model="keyword" placeholder="搜索分组" clearable style="width: 240px" :prefix-icon="Search" />
-      <el-button type="primary" :icon="Plus" @click="handleAdd">
+      <el-button v-if="canManageGroups" type="primary" :icon="Plus" @click="handleAdd">
         新增分组
       </el-button>
     </div>
@@ -95,7 +99,7 @@ async function handleDelete(row: Group) {
       <el-table-column prop="member_count" label="成员数" width="100" />
       <el-table-column prop="description" label="描述" />
       <el-table-column prop="created_at" label="创建时间" width="180" />
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column v-if="canManageGroups" label="操作" width="160" fixed="right">
         <template #default="{ row }">
           <el-button :icon="Edit" link type="primary" @click="handleEdit(row)">
             编辑

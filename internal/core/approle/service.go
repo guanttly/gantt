@@ -30,6 +30,13 @@ var (
 
 var appRolePermissions = map[string][]string{
 	RoleScheduleAdmin: {
+		"app-role:manage",
+		"group:view:node",
+		"group:manage",
+		"shift:view:node",
+		"shift:manage",
+		"rule:view:node",
+		"rule:manage",
 		"schedule:create",
 		"schedule:execute",
 		"schedule:adjust",
@@ -39,6 +46,8 @@ var appRolePermissions = map[string][]string{
 		"leave:view:node",
 	},
 	RoleScheduler: {
+		"group:view:node",
+		"shift:view:node",
 		"schedule:create",
 		"schedule:execute",
 		"schedule:adjust",

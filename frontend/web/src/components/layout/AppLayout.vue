@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { Calendar, ChatDotRound, User } from '@element-plus/icons-vue'
+import { Calendar, ChatDotRound, Setting, User } from '@element-plus/icons-vue'
 import { computed, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import OrgNodeSelector from '@/components/common/OrgNodeSelector.vue'
@@ -14,6 +14,7 @@ const auth = useAuthStore()
 const iconMap: Record<string, any> = {
   'calendar': markRaw(Calendar),
   'user': markRaw(User),
+  'setting': markRaw(Setting),
   'chat-dot-round': markRaw(ChatDotRound),
 }
 
@@ -52,6 +53,18 @@ const navGroups: NavItem[] = [
     ],
   },
   {
+    path: '/groups',
+    label: '科室配置',
+    icon: 'setting',
+    requiredAnyPermissions: ['group:view:node', 'group:manage', 'shift:view:node', 'shift:manage', 'rule:view:node', 'rule:manage', 'app-role:manage'],
+    children: [
+      { path: '/groups', label: '分组管理', requiredAnyPermissions: ['group:view:node', 'group:manage'] },
+      { path: '/shifts', label: '班次管理', requiredAnyPermissions: ['shift:view:node', 'shift:manage'] },
+      { path: '/rules', label: '规则管理', requiredAnyPermissions: ['rule:view:node', 'rule:manage'] },
+      { path: '/app-permissions', label: '应用权限', requiredPermission: 'app-role:manage' },
+    ],
+  },
+  {
     path: '/ai/chat',
     label: 'AI 助手',
     icon: 'chat-dot-round',
@@ -66,6 +79,9 @@ const activeTopPath = computed(() => {
     return '/scheduling'
   if (p.startsWith('/leaves'))
     return '/leaves'
+  if ((p.startsWith('/groups') || p.startsWith('/shifts') || p.startsWith('/rules') || p.startsWith('/app-permissions'))
+    && auth.hasAnyPermission(['group:view:node', 'group:manage', 'shift:view:node', 'shift:manage', 'rule:view:node', 'rule:manage', 'app-role:manage']))
+    return '/groups'
   if (p.startsWith('/ai'))
     return '/ai/chat'
   return '/dashboard'

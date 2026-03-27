@@ -5,8 +5,8 @@ import "strings"
 // 预置角色权限定义。
 var rolePermissions = map[string][]string{
 	string(RolePlatformAdmin): {"*"},
-	string(RoleOrgAdmin):      {"org:*", "employee:*", "shift:*", "rule:*", "schedule:*", "leave:*", "ai:*", "platform:manage_scope", "platform:user:manage"},
-	string(RoleDeptAdmin):     {"employee:*", "shift:*", "rule:*", "schedule:*", "leave:*", "platform:manage_scope"},
+	string(RoleOrgAdmin):      {"org:*", "employee:*", "ai:*", "platform:manage_scope", "platform:user:manage"},
+	string(RoleDeptAdmin):     {"employee:read"},
 	string(RoleScheduler):     {"employee:read", "shift:read", "rule:read", "schedule:*", "leave:read"},
 	string(RoleEmployee):      {"schedule:read:self", "leave:create:self", "preference:*:self"},
 }

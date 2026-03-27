@@ -14,9 +14,11 @@ import (
 )
 
 var (
-	ErrEmployeeNotFound       = errors.New("员工不存在")
-	ErrEmployeeNoDup          = errors.New("同节点下工号已存在")
-	ErrEmployeeNodeOutOfScope = errors.New("目标组织节点不在当前管理范围内")
+	ErrEmployeeNotFound             = errors.New("员工不存在")
+	ErrEmployeeNoDup                = errors.New("同节点下工号已存在")
+	ErrEmployeeNodeOutOfScope       = errors.New("目标组织节点不在当前管理范围内")
+	ErrEmployeeNodeMustBeDepartment = errors.New("员工只能绑定到科室节点")
+	ErrEmployeeSameDepartment       = errors.New("目标科室与当前科室相同，无需调动")
 )
 
 // CreateInput 创建员工的输入参数。
@@ -42,6 +44,11 @@ type UpdateInput struct {
 	Category   *string `json:"category,omitempty"`
 	Status     *string `json:"status,omitempty"`
 	HireDate   *string `json:"hire_date,omitempty"`
+}
+
+type ResetPasswordResult struct {
+	DefaultPassword string `json:"default_password"`
+	MustResetPwd    bool   `json:"must_reset_pwd"`
 }
 
 // Service 员工业务逻辑层。
@@ -257,6 +264,35 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, id)
 }
 
+func (s *Service) ResetPassword(ctx context.Context, id string) (*ResetPasswordResult, error) {
+	emp, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrEmployeeNotFound
+		}
+		return nil, err
+	}
+
+	defaultPassword := buildDefaultAppPassword(emp)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(defaultPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("生成员工应用密码失败: %w", err)
+	}
+	hash := string(hashedPassword)
+	emp.AppPasswordHash = &hash
+	emp.AppMustResetPwd = true
+	emp.AppDefaultPassword = &defaultPassword
+
+	if err := s.repo.Update(ctx, emp); err != nil {
+		return nil, fmt.Errorf("重置员工应用密码失败: %w", err)
+	}
+
+	return &ResetPasswordResult{
+		DefaultPassword: defaultPassword,
+		MustResetPwd:    true,
+	}, nil
+}
+
 // List 分页查询员工列表。
 func (s *Service) List(ctx context.Context, opts ListOptions) ([]Employee, int64, error) {
 	if opts.Page <= 0 {
@@ -276,11 +312,13 @@ func (s *Service) resolveTargetOrgNodeID(ctx context.Context, target *string) (s
 	if currentOrgNodeID == "" {
 		return "", fmt.Errorf("缺少组织节点信息")
 	}
+	targetOrgNodeID := currentOrgNodeID
 	if target == nil || strings.TrimSpace(*target) == "" {
-		return currentOrgNodeID, nil
+		targetOrgNodeID = currentOrgNodeID
+	} else {
+		targetOrgNodeID = strings.TrimSpace(*target)
 	}
 
-	targetOrgNodeID := strings.TrimSpace(*target)
 	var node tenant.OrgNode
 	if err := s.repo.db.WithContext(tenant.SkipTenantGuard(ctx)).Where("id = ?", targetOrgNodeID).First(&node).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -293,6 +331,12 @@ func (s *Service) resolveTargetOrgNodeID(ctx context.Context, target *string) (s
 	targetPath := strings.TrimRight(node.Path, "/")
 	if currentPath != "" && targetPath != currentPath && !strings.HasPrefix(targetPath, currentPath+"/") {
 		return "", ErrEmployeeNodeOutOfScope
+	}
+	if !node.IsActive() {
+		return "", tenant.ErrNodeSuspended
+	}
+	if node.NodeType != tenant.NodeTypeDepartment {
+		return "", ErrEmployeeNodeMustBeDepartment
 	}
 
 	return node.ID, nil
@@ -368,7 +412,7 @@ func (s *Service) Transfer(ctx context.Context, id string, input TransferInput) 
 		return nil, fmt.Errorf("target_org_node_id 为必填项")
 	}
 	if emp.OrgNodeID == input.TargetOrgNodeID {
-		return nil, fmt.Errorf("目标科室与当前科室相同，无需调动")
+		return nil, ErrEmployeeSameDepartment
 	}
 
 	// 验证目标节点存在且在管理范围内

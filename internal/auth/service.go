@@ -20,6 +20,7 @@ var (
 	ErrUserNotFound        = errors.New("用户不存在")
 	ErrUserDisabled        = errors.New("用户已禁用")
 	ErrInvalidCredentials  = errors.New("用户名或密码错误")
+	ErrAdminLoginRequired  = errors.New("仅后台管理账号可登录")
 	ErrUsernameExists      = errors.New("用户名已存在")
 	ErrEmailExists         = errors.New("邮箱已存在")
 	ErrPublicRegisterRole  = errors.New("公开注册仅允许创建 employee 角色")
@@ -259,6 +260,62 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*LoginResponse, 
 			AvailableNodes: []NodeRoleInfo{},
 			MustResetPwd:   user.MustResetPwd,
 		}, nil
+	}
+
+	return s.buildLoginResponse(ctx, user, orgNodeID)
+}
+
+// AdminLogin 后台账号登录。
+func (s *Service) AdminLogin(ctx context.Context, input LoginInput) (*LoginResponse, error) {
+	locked, err := s.isAccountLocked(ctx, input.Username)
+	if err != nil {
+		return nil, fmt.Errorf("检查锁定状态失败: %w", err)
+	}
+	if locked {
+		return nil, ErrAccountLocked
+	}
+
+	user, err := s.repo.GetUserByUsername(ctx, input.Username)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			s.recordLoginFailure(ctx, input.Username)
+			return nil, ErrInvalidCredentials
+		}
+		return nil, fmt.Errorf("查询用户失败: %w", err)
+	}
+
+	if user.Status == UserStatusDisabled {
+		return nil, ErrUserDisabled
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
+		s.recordLoginFailure(ctx, input.Username)
+		return nil, ErrInvalidCredentials
+	}
+
+	s.clearLoginFailure(ctx, input.Username)
+
+	unrs, err := s.repo.GetUserNodeRoles(ctx, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("查询用户节点失败: %w", err)
+	}
+
+	adminNodeRoles := filterUserNodeRoles(unrs, func(roleName string) bool {
+		return roleName == string(RolePlatformAdmin) || roleName == string(RoleOrgAdmin)
+	})
+	if len(adminNodeRoles) == 0 {
+		return nil, ErrAdminLoginRequired
+	}
+
+	orgNodeID := input.OrgNodeID
+	if orgNodeID == "" {
+		orgNodeID = s.pickPreferredOrgNodeID(adminNodeRoles)
+	} else if !containsOrgNode(adminNodeRoles, orgNodeID) {
+		return nil, ErrNoNodePermission
+	}
+
+	if orgNodeID == "" {
+		return nil, ErrAdminLoginRequired
 	}
 
 	return s.buildLoginResponse(ctx, user, orgNodeID)
@@ -610,6 +667,28 @@ func rolePriority(unr UserNodeRole) int {
 	default:
 		return 0
 	}
+}
+
+func filterUserNodeRoles(unrs []UserNodeRole, allow func(roleName string) bool) []UserNodeRole {
+	filtered := make([]UserNodeRole, 0, len(unrs))
+	for _, unr := range unrs {
+		if unr.Role == nil {
+			continue
+		}
+		if allow(unr.Role.Name) {
+			filtered = append(filtered, unr)
+		}
+	}
+	return filtered
+}
+
+func containsOrgNode(unrs []UserNodeRole, orgNodeID string) bool {
+	for _, unr := range unrs {
+		if unr.OrgNodeID == orgNodeID {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) assignRoleInternal(ctx context.Context, userID, orgNodeID, roleName string) error {

@@ -628,8 +628,8 @@ func TestService_RBAC_EmployeeCannotCreateSchedule(t *testing.T) {
 	if !HasPermission(string(RoleScheduler), "schedule:create") {
 		t.Error("scheduler 应有 schedule:create 权限")
 	}
-	if !HasPermission(string(RoleDeptAdmin), "schedule:create") {
-		t.Error("dept_admin 应有 schedule:create 权限")
+	if HasPermission(string(RoleDeptAdmin), "schedule:create") {
+		t.Error("dept_admin 不应再有 schedule:create 权限")
 	}
 	if !HasPermission(string(RolePlatformAdmin), "schedule:create") {
 		t.Error("platform_admin 应有 schedule:create 权限")
@@ -1117,5 +1117,90 @@ func TestService_Login_WithoutOrgNodeID_PrefersPlatformAdmin(t *testing.T) {
 
 	if loginResult.CurrentNode.NodeID != "platform-root" {
 		t.Fatalf("CurrentNode.NodeID = %q, want %q", loginResult.CurrentNode.NodeID, "platform-root")
+	}
+}
+
+func TestService_AdminLogin_RejectsDeptAdminOnly(t *testing.T) {
+	svc, db := setupTestService(t)
+	ctx := context.Background()
+
+	if err := svc.SeedSystemRoles(ctx); err != nil {
+		t.Fatalf("SeedSystemRoles error: %v", err)
+	}
+	seedTestOrgNode(t, db, "dept-001", "心内科", "/org-001/dept-001", 1)
+
+	regResult, err := svc.Register(ctx, RegisterInput{
+		Username: "dept_only",
+		Email:    "dept_only@example.com",
+		Password: "Abc12345",
+	})
+	if err != nil {
+		t.Fatalf("Register error = %v", err)
+	}
+
+	if _, err := svc.AssignRole(ctx, AssignRoleInput{
+		UserID:    regResult.User.ID,
+		OrgNodeID: "dept-001",
+		RoleName:  string(RoleDeptAdmin),
+	}); err != nil {
+		t.Fatalf("AssignRole error = %v", err)
+	}
+
+	_, err = svc.AdminLogin(ctx, LoginInput{Username: "dept_only", Password: "Abc12345"})
+	if err != ErrAdminLoginRequired {
+		t.Fatalf("AdminLogin error = %v, want %v", err, ErrAdminLoginRequired)
+	}
+}
+
+func TestService_AdminLogin_PrefersOrgAdminNode(t *testing.T) {
+	svc, db := setupTestService(t)
+	ctx := context.Background()
+
+	if err := svc.SeedSystemRoles(ctx); err != nil {
+		t.Fatalf("SeedSystemRoles error: %v", err)
+	}
+	seedTestOrgNode(t, db, "org-001", "测试医院", "/org-001", 0)
+	seedTestOrgNode(t, db, "dept-001", "心内科", "/org-001/dept-001", 1)
+
+	regResult, err := svc.Register(ctx, RegisterInput{
+		Username: "org_admin_user",
+		Email:    "org_admin_user@example.com",
+		Password: "Abc12345",
+	})
+	if err != nil {
+		t.Fatalf("Register error = %v", err)
+	}
+
+	if _, err := svc.AssignRole(ctx, AssignRoleInput{
+		UserID:    regResult.User.ID,
+		OrgNodeID: "dept-001",
+		RoleName:  string(RoleDeptAdmin),
+	}); err != nil {
+		t.Fatalf("AssignRole dept error = %v", err)
+	}
+
+	if _, err := svc.AssignRole(ctx, AssignRoleInput{
+		UserID:    regResult.User.ID,
+		OrgNodeID: "org-001",
+		RoleName:  string(RoleOrgAdmin),
+	}); err != nil {
+		t.Fatalf("AssignRole org error = %v", err)
+	}
+
+	loginResult, err := svc.AdminLogin(ctx, LoginInput{Username: "org_admin_user", Password: "Abc12345"})
+	if err != nil {
+		t.Fatalf("AdminLogin error = %v", err)
+	}
+
+	if loginResult.CurrentNode == nil {
+		t.Fatal("CurrentNode should not be nil")
+	}
+
+	if loginResult.CurrentNode.RoleName != string(RoleOrgAdmin) {
+		t.Fatalf("CurrentNode.RoleName = %q, want %q", loginResult.CurrentNode.RoleName, string(RoleOrgAdmin))
+	}
+
+	if loginResult.CurrentNode.NodeID != "org-001" {
+		t.Fatalf("CurrentNode.NodeID = %q, want %q", loginResult.CurrentNode.NodeID, "org-001")
 	}
 }

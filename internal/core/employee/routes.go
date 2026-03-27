@@ -26,6 +26,7 @@ func RegisterPlatformRoutes(r chi.Router, h *Handler) {
 		r.Post("/", h.Create)
 		r.Post("/batch-transfer", h.BatchTransfer)
 		r.Get("/{id}", h.GetByID)
+		r.Put("/{id}/reset-pwd", h.ResetPassword)
 		r.Put("/{id}", h.Update)
 		r.Delete("/{id}", h.Delete)
 		r.Post("/{id}/transfer", h.Transfer)

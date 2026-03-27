@@ -117,6 +117,20 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
+// ResetPassword 重置员工应用密码。
+// PUT /api/v1/platform/employees/:id/reset-pwd
+func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	result, err := h.svc.ResetPassword(r.Context(), id)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.OK(w, result)
+}
+
 func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrEmployeeNotFound):
@@ -125,8 +139,14 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		response.Conflict(w, err.Error())
 	case errors.Is(err, tenant.ErrNodeNotFound):
 		response.NotFound(w, err.Error())
+	case errors.Is(err, tenant.ErrNodeSuspended):
+		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrEmployeeNodeOutOfScope):
 		response.Forbidden(w, err.Error())
+	case errors.Is(err, ErrEmployeeNodeMustBeDepartment):
+		response.BadRequest(w, err.Error())
+	case errors.Is(err, ErrEmployeeSameDepartment):
+		response.BadRequest(w, err.Error())
 	default:
 		response.InternalError(w, "内部错误")
 	}

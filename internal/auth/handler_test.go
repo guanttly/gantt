@@ -16,6 +16,7 @@ func TestRegisterRoutes(t *testing.T) {
 	r := chi.NewRouter()
 	r.Route("/api/v1", func(r chi.Router) {
 		RegisterPublicRoutes(r, h)
+		RegisterAdminPublicRoutes(r, h)
 
 		r.Group(func(r chi.Router) {
 			RegisterProtectedRoutes(r, h)
@@ -53,6 +54,21 @@ func TestHandler_Login_InvalidJSON(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	h.Login(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestHandler_AdminLogin_BadRequest(t *testing.T) {
+	svc := &Service{}
+	h := NewHandler(svc)
+
+	body := bytes.NewBufferString(`{"username":""}`)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
+	w := httptest.NewRecorder()
+
+	h.AdminLogin(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -145,6 +161,7 @@ func TestHandleError_AllCases(t *testing.T) {
 		{"ExpiredToken", ErrExpiredToken, http.StatusUnauthorized},
 		{"UserNotFound", ErrUserNotFound, http.StatusNotFound},
 		{"UserDisabled", ErrUserDisabled, http.StatusForbidden},
+		{"AdminLoginRequired", ErrAdminLoginRequired, http.StatusForbidden},
 		{"AccountLocked", ErrAccountLocked, http.StatusTooManyRequests},
 		{"NoNodePermission", ErrNoNodePermission, http.StatusForbidden},
 		{"UsernameExists", ErrUsernameExists, http.StatusConflict},

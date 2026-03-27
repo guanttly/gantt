@@ -20,6 +20,10 @@ export const useAuthStore = defineStore('auth', () => {
     return ROLE_HIERARCHY.indexOf(currentRole.value) >= ROLE_HIERARCHY.indexOf(role)
   }
 
+	function hasExactRole(role: RoleName): boolean {
+		return currentRole.value === role
+	}
+
   async function login(username: string, password: string) {
     const res = await apiLogin({ username, password })
     accessToken.value = res.access_token
@@ -58,6 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLoggedIn,
     currentRole,
     hasRole,
+		hasExactRole,
     login,
     fetchUserInfo,
     logout,

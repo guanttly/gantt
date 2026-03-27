@@ -22,8 +22,9 @@ import (
 var (
 	ErrPlatformUserNotFound    = errors.New("平台账号不存在")
 	ErrInvalidPlatformUser     = errors.New("平台账号用户名、邮箱、组织节点和角色为必填项")
-	ErrInvalidPlatformRole     = errors.New("平台账号只允许分配机构管理员或科室管理员角色")
+	ErrInvalidPlatformRole     = errors.New("平台账号只允许分配机构管理员角色")
 	ErrCannotDisableSelf       = errors.New("不能禁用当前登录账号")
+	ErrCannotDeleteSelf        = errors.New("不能删除当前登录账号")
 	ErrCannotResetUnknownScope = errors.New("平台账号未绑定组织节点，无法重置默认密码")
 	ErrManageScopeDenied       = errors.New("目标资源不在当前管理范围内")
 )
@@ -79,7 +80,6 @@ type PlatformUserService struct {
 var manageablePlatformRoleNames = []string{
 	string(auth.RolePlatformAdmin),
 	string(auth.RoleOrgAdmin),
-	string(auth.RoleDeptAdmin),
 }
 
 func NewPlatformUserService(db *gorm.DB) *PlatformUserService {
@@ -247,8 +247,7 @@ func (s *PlatformUserService) ResetPassword(ctx context.Context, id string) (*Re
 		if len(rows) == 0 {
 			return ErrCannotResetUnknownScope
 		}
-		rows = filterRoleRowsByScope(ctx, rows)
-		if len(rows) == 0 {
+		if !allRoleRowsInScope(ctx, rows) {
 			return ErrManageScopeDenied
 		}
 
@@ -282,12 +281,8 @@ func (s *PlatformUserService) Disable(ctx context.Context, id, actorUserID strin
 		return ErrCannotDisableSelf
 	}
 
-	item, err := s.GetByID(ctx, id)
-	if err != nil {
+	if err := s.ensureUserMutable(ctx, id); err != nil {
 		return err
-	}
-	if item == nil {
-		return ErrPlatformUserNotFound
 	}
 
 	result := s.db.WithContext(tenant.SkipTenantGuard(ctx)).Model(&auth.User{}).Where("id = ?", id).Update("status", auth.UserStatusDisabled)
@@ -299,6 +294,45 @@ func (s *PlatformUserService) Disable(ctx context.Context, id, actorUserID strin
 	}
 
 	return nil
+}
+
+func (s *PlatformUserService) Enable(ctx context.Context, id string) error {
+	if err := s.ensureUserMutable(ctx, id); err != nil {
+		return err
+	}
+
+	result := s.db.WithContext(tenant.SkipTenantGuard(ctx)).Model(&auth.User{}).Where("id = ?", id).Update("status", auth.UserStatusActive)
+	if result.Error != nil {
+		return fmt.Errorf("启用平台账号失败: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrPlatformUserNotFound
+	}
+
+	return nil
+}
+
+func (s *PlatformUserService) Delete(ctx context.Context, id, actorUserID string) error {
+	if actorUserID != "" && actorUserID == id {
+		return ErrCannotDeleteSelf
+	}
+	if err := s.ensureUserMutable(ctx, id); err != nil {
+		return err
+	}
+
+	return s.db.WithContext(tenant.SkipTenantGuard(ctx)).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", id).Delete(&auth.UserNodeRole{}).Error; err != nil {
+			return fmt.Errorf("删除平台账号角色绑定失败: %w", err)
+		}
+		result := tx.Where("id = ?", id).Delete(&auth.User{})
+		if result.Error != nil {
+			return fmt.Errorf("删除平台账号失败: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return ErrPlatformUserNotFound
+		}
+		return nil
+	})
 }
 
 func (s *PlatformUserService) buildPlatformUserResponses(ctx context.Context, users []auth.User) ([]PlatformUserResponse, error) {
@@ -375,10 +409,14 @@ func (s *PlatformUserService) loadRoleRows(db *gorm.DB, userIDs []string) (map[s
 }
 
 func isAllowedPlatformRole(roleName string) bool {
-	return roleName == string(auth.RoleOrgAdmin) || roleName == string(auth.RoleDeptAdmin)
+	return roleName == string(auth.RoleOrgAdmin)
 }
 
 func currentScopePath(ctx context.Context) string {
+	claims := auth.GetClaims(ctx)
+	if claims != nil && claims.RoleName == string(auth.RolePlatformAdmin) {
+		return ""
+	}
 	return strings.TrimRight(tenant.GetOrgNodePath(ctx), "/")
 }
 
@@ -404,6 +442,21 @@ func filterRoleRowsByScope(ctx context.Context, rows []platformUserRoleRow) []pl
 	return filtered
 }
 
+func allRoleRowsInScope(ctx context.Context, rows []platformUserRoleRow) bool {
+	if currentScopePath(ctx) == "" {
+		return true
+	}
+	if len(rows) == 0 {
+		return false
+	}
+	for _, row := range rows {
+		if !isPathInScope(ctx, row.OrgNodePath) {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *PlatformUserService) ensureNodeInScope(ctx context.Context, nodeID string) error {
 	var node tenant.OrgNode
 	if err := s.db.WithContext(tenant.SkipTenantGuard(ctx)).Where("id = ?", nodeID).First(&node).Error; err != nil {
@@ -413,6 +466,26 @@ func (s *PlatformUserService) ensureNodeInScope(ctx context.Context, nodeID stri
 		return fmt.Errorf("查询组织节点失败: %w", err)
 	}
 	if !isPathInScope(ctx, node.Path) {
+		return ErrManageScopeDenied
+	}
+	return nil
+}
+
+func (s *PlatformUserService) ensureUserMutable(ctx context.Context, id string) error {
+	var user auth.User
+	if err := s.db.WithContext(tenant.SkipTenantGuard(ctx)).Where("id = ?", id).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrPlatformUserNotFound
+		}
+		return fmt.Errorf("查询平台账号失败: %w", err)
+	}
+
+	roleRows, err := s.loadRoleRows(s.db.WithContext(tenant.SkipTenantGuard(ctx)), []string{id})
+	if err != nil {
+		return err
+	}
+	rows := roleRows[id]
+	if len(rows) == 0 || !allRoleRowsInScope(ctx, rows) {
 		return ErrManageScopeDenied
 	}
 	return nil
@@ -487,6 +560,30 @@ func (h *PlatformUserHandler) Disable(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, map[string]string{"status": "disabled"})
 }
 
+func (h *PlatformUserHandler) Enable(w http.ResponseWriter, r *http.Request) {
+	if err := h.svc.Enable(r.Context(), chi.URLParam(r, "id")); err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.OK(w, map[string]string{"status": "active"})
+}
+
+func (h *PlatformUserHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	actorID := ""
+	if claims != nil {
+		actorID = claims.UserID
+	}
+
+	if err := h.svc.Delete(r.Context(), chi.URLParam(r, "id"), actorID); err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.NoContent(w)
+}
+
 func (h *PlatformUserHandler) handleError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrInvalidPlatformUser):
@@ -498,6 +595,8 @@ func (h *PlatformUserHandler) handleError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrPlatformUserNotFound):
 		response.NotFound(w, err.Error())
 	case errors.Is(err, ErrCannotDisableSelf):
+		response.BadRequest(w, err.Error())
+	case errors.Is(err, ErrCannotDeleteSelf):
 		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrCannotResetUnknownScope):
 		response.BadRequest(w, err.Error())

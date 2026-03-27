@@ -20,7 +20,7 @@ export function listRules(params?: ListParams) {
   return client.get<PaginatedResponse<Rule>>('/rules/', { params }).then(r => r.data)
 }
 
-/** 获取生效规则（含继承） */
+/** 获取当前科室生效规则 */
 export function getEffectiveRules(params?: EffectiveRulesParams) {
   return client.get<Rule[]>('/rules/effective', { params }).then(r => r.data)
 }

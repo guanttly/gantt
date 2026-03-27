@@ -168,12 +168,14 @@ func initDependencies(
 	groupRepo := group.NewRepository(db)
 	groupSvc := group.NewService(groupRepo)
 	groupSvc.SetAppRoleSyncer(appRoleSvc)
+	groupSvc.SetOrgNodeResolver(tenantSvc)
 	groupHandler := group.NewHandler(groupSvc)
 
 	employeeSvc.SetGroupCleaner(groupSvc)
 
 	shiftRepo := shift.NewRepository(db)
 	shiftSvc := shift.NewService(shiftRepo)
+	shiftSvc.SetOrgNodeResolver(tenantSvc)
 	shiftHandler := shift.NewHandler(shiftSvc)
 
 	leaveRepo := leave.NewRepository(db)
@@ -182,6 +184,7 @@ func initDependencies(
 
 	ruleRepo := rule.NewRepository(db)
 	ruleSvc := rule.NewService(ruleRepo, tenantRepo)
+	ruleSvc.SetOrgNodeResolver(tenantSvc)
 	ruleHandler := rule.NewHandler(ruleSvc)
 
 	scheduleRepo := schedule.NewRepository(db)
@@ -356,6 +359,7 @@ func registerRoutes(srv *appserver.Server, deps *appDependencies) {
 
 	srv.Router.Route("/api/v1", func(r chi.Router) {
 		auth.RegisterPublicRoutes(r, deps.authHandler)
+		auth.RegisterAdminPublicRoutes(r, deps.authHandler)
 		auth.RegisterAppPublicRoutes(r, deps.appAuthHandler)
 
 		r.Group(func(r chi.Router) {
@@ -365,11 +369,12 @@ func registerRoutes(srv *appserver.Server, deps *appDependencies) {
 
 			auth.RegisterProtectedRoutes(r, deps.authHandler)
 			approle.RegisterUserRoutes(r, deps.appRoleHandler)
+			approle.RegisterManagementRoutes(r, deps.appRoleHandler, deps.appRoleService)
 			employee.RegisterRoutes(r, deps.employeeHandler)
-			group.RegisterRoutes(r, deps.groupHandler)
-			shift.RegisterRoutes(r, deps.shiftHandler)
+			group.RegisterRoutes(r, deps.groupHandler, deps.appRoleService)
+			shift.RegisterRoutes(r, deps.shiftHandler, deps.appRoleService)
 			leave.RegisterRoutes(r, deps.leaveHandler, deps.appRoleService)
-			rule.RegisterRoutes(r, deps.ruleHandler)
+			rule.RegisterRoutes(r, deps.ruleHandler, deps.appRoleService)
 			schedule.RegisterRoutes(r, deps.scheduleHandler, deps.appRoleService)
 			if deps.aiHandler != nil {
 				aiapi.RegisterRoutes(r, deps.aiHandler)
@@ -397,9 +402,6 @@ func registerRoutes(srv *appserver.Server, deps *appDependencies) {
 				r.Use(auth.RequirePermission("platform:manage_scope"))
 				approle.RegisterPlatformRoutes(r, deps.appRoleHandler)
 				employee.RegisterPlatformRoutes(r, deps.employeeHandler)
-				group.RegisterPlatformRoutes(r, deps.groupHandler)
-				shift.RegisterPlatformRoutes(r, deps.shiftHandler)
-				rule.RegisterPlatformRoutes(r, deps.ruleHandler)
 			})
 		})
 

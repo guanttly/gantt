@@ -1,19 +1,19 @@
 package rule
 
 import (
-	"net/http"
+	"gantt-saas/internal/core/approle"
 
 	"github.com/go-chi/chi/v5"
 )
 
 // RegisterRoutes 注册规则管理路由到 /api/v1/rules。
-func RegisterRoutes(r chi.Router, h *Handler) {
-	registerAt(r, "/rules", h, h.RestoreInheritance)
+func RegisterRoutes(r chi.Router, h *Handler, appRoleSvc *approle.Service) {
+	registerAt(r, "/rules", h, appRoleSvc)
 }
 
 // RegisterPlatformRoutes 注册平台侧规则管理路由到 /api/v1/platform/rules。
-func RegisterPlatformRoutes(r chi.Router, h *Handler) {
-	registerAt(r, "/platform/rules", h, h.RestoreInheritance)
+func RegisterPlatformRoutes(r chi.Router, h *Handler, appRoleSvc *approle.Service) {
+	registerAt(r, "/platform/rules", h, appRoleSvc)
 }
 
 // RegisterAppRefRoutes 注册排班应用只读规则引用路由到 /api/v1/app/scheduling/ref/rules。
@@ -23,17 +23,14 @@ func RegisterAppRefRoutes(r chi.Router, h *Handler) {
 	})
 }
 
-func registerAt(r chi.Router, basePath string, h *Handler, restoreHandler http.HandlerFunc) {
+func registerAt(r chi.Router, basePath string, h *Handler, appRoleSvc *approle.Service) {
 	r.Route(basePath, func(r chi.Router) {
-		r.Get("/", h.List)
-		r.Get("/effective", h.GetEffective)
-		r.Post("/", h.Create)
-		r.Post("/validate", h.Validate)
-		r.Get("/{id}", h.GetByID)
-		r.Put("/{id}", h.Update)
-		r.Put("/{id}/disable", h.DisableInherited)
-		r.Put("/{id}/restore", restoreHandler)
-		r.Put("/{id}/enable", restoreHandler)
-		r.Delete("/{id}", h.Delete)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:view:node", "rule:manage")).Get("/", h.List)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:view:node", "rule:manage")).Get("/effective", h.GetEffective)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:manage")).Post("/", h.Create)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:manage")).Post("/validate", h.Validate)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:view:node", "rule:manage")).Get("/{id}", h.GetByID)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:manage")).Put("/{id}", h.Update)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:manage")).Delete("/{id}", h.Delete)
 	})
 }

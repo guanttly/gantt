@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { PlatformEmployee, PlatformEmployeePayload } from '@/api/platform'
+import type { PlatformEmployee, PlatformEmployeeAppRole, PlatformEmployeePayload } from '@/api/platform'
 import { computed, onMounted, ref } from 'vue'
 import { NButton, NForm, NFormItem, NInput, NModal, NSelect, NSpin, NTag, useDialog, useMessage } from 'naive-ui'
 import { getOrgTree } from '@/api/org'
-import { createPlatformEmployee, deletePlatformEmployee, listPlatformEmployees, transferEmployee, updatePlatformEmployee } from '@/api/platform'
+import { assignEmployeeAppRole, createPlatformEmployee, deletePlatformEmployee, listEmployeeAppRoles, listPlatformEmployees, removeEmployeeAppRole, resetPlatformEmployeePassword, transferEmployee, updatePlatformEmployee } from '@/api/platform'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -11,6 +11,7 @@ const auth = useAuthStore()
 const loading = ref(false)
 const saving = ref(false)
 const employees = ref<PlatformEmployee[]>([])
+const employeeRoleMap = ref<Record<string, PlatformEmployeeAppRole[]>>({})
 const orgTree = ref<any[]>([])
 const keyword = ref('')
 const dialogVisible = ref(false)
@@ -20,6 +21,7 @@ const dialog = useDialog()
 
 const transferVisible = ref(false)
 const transferring = ref(false)
+const roleUpdatingEmployeeId = ref<string | null>(null)
 const transferTarget = ref<PlatformEmployee | null>(null)
 const transferForm = ref({ target_org_node_id: '', reason: '' })
 
@@ -55,16 +57,38 @@ const statusOptions = [
 ]
 
 const orgOptions = computed(() => flattenOrgTree(orgTree.value))
+const departmentOptions = computed(() => flattenOrgTree(orgTree.value).filter(item => item.nodeType === 'department'))
+
+type OrgOption = {
+  label: string
+  value: string
+  nodeType: string
+}
+
+function getDefaultDepartmentId() {
+  const currentNodeId = auth.currentNode?.node_id
+  if (currentNodeId && departmentOptions.value.some(item => item.value === currentNodeId)) {
+    return currentNodeId
+  }
+  return departmentOptions.value[0]?.value || ''
+}
+
+function getDefaultTransferDepartmentId(currentOrgNodeId: string) {
+  return departmentOptions.value.find(item => item.value !== currentOrgNodeId)?.value || ''
+}
 
 function normalizePayload(payload: PlatformEmployeePayload): PlatformEmployeePayload {
   return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== '' && value !== undefined)) as PlatformEmployeePayload
 }
 
-function flattenOrgTree(nodes: any[], level = 0): Array<{ label: string, value: string }> {
-  return nodes.flatMap(node => [
-    { label: `${'　'.repeat(level)}${node.name}`, value: node.id },
-    ...flattenOrgTree(node.children || [], level + 1),
-  ])
+function flattenOrgTree(nodes: any[], ancestors: string[] = []): OrgOption[] {
+  return nodes.flatMap((node): OrgOption[] => {
+    const nextAncestors = [...ancestors, node.name]
+    return [
+      { label: nextAncestors.join(' / '), value: node.id, nodeType: node.node_type },
+      ...flattenOrgTree(node.children || [], nextAncestors),
+    ]
+  })
 }
 
 function orgNodeName(orgNodeId: string) {
@@ -73,7 +97,7 @@ function orgNodeName(orgNodeId: string) {
 
 function resetForm() {
   form.value = {
-    org_node_id: auth.currentNode?.node_id || orgOptions.value[0]?.value || '',
+    org_node_id: getDefaultDepartmentId(),
     name: '',
     employee_no: '',
     phone: '',
@@ -94,10 +118,40 @@ async function loadEmployees() {
     ])
     employees.value = result.data
     orgTree.value = tree
+    const roleEntries = await Promise.all(result.data.map(async employee => {
+      const roles = await listEmployeeAppRoles(employee.id)
+      return [employee.id, roles] as const
+    }))
+    employeeRoleMap.value = Object.fromEntries(roleEntries)
   }
   finally {
     loading.value = false
   }
+}
+
+function employeeRoles(employeeId: string) {
+  return employeeRoleMap.value[employeeId] || []
+}
+
+function currentDepartmentAdminRole(employee: PlatformEmployee) {
+  return employeeRoles(employee.id).find(role => role.app_role === 'app:schedule_admin' && role.org_node_id === employee.org_node_id)
+}
+
+function hasCurrentDepartmentAdminRole(employee: PlatformEmployee) {
+  return !!currentDepartmentAdminRole(employee)
+}
+
+function appRoleLabel(role: PlatformEmployeeAppRole) {
+  if (role.app_role === 'app:schedule_admin') {
+    return '科室管理员'
+  }
+  if (role.app_role === 'app:scheduler') {
+    return '排班员'
+  }
+  if (role.app_role === 'app:leave_approver') {
+    return '请假审批人'
+  }
+  return role.app_role
 }
 
 function openCreate() {
@@ -128,7 +182,7 @@ async function submit() {
     return
   }
   if (!form.value.org_node_id) {
-    message.warning('请选择所属组织节点')
+    message.warning('请选择所属科室')
     return
   }
 
@@ -171,9 +225,75 @@ async function removeEmployee(employee: PlatformEmployee) {
   })
 }
 
+function resetEmployeePassword(employee: PlatformEmployee) {
+  dialog.warning({
+    title: '重置员工应用密码',
+    content: `确定重置 ${employee.name} 的默认密码？`,
+    positiveText: '重置',
+    negativeText: '取消',
+    async onPositiveClick() {
+      const result = await resetPlatformEmployeePassword(employee.id)
+      dialog.success({
+        title: '密码已重置',
+        content: `员工 ${employee.name} 的新默认密码为：${result.default_password}`,
+        positiveText: '知道了',
+      })
+      await loadEmployees()
+    },
+  })
+}
+
+function toggleDepartmentAdmin(employee: PlatformEmployee) {
+  const existingRole = currentDepartmentAdminRole(employee)
+  if (existingRole) {
+    dialog.warning({
+      title: '取消科室管理员',
+      content: `确定取消「${employee.name}」在当前科室的管理员权限？`,
+      positiveText: '取消权限',
+      negativeText: '保留',
+      async onPositiveClick() {
+        roleUpdatingEmployeeId.value = employee.id
+        try {
+          await removeEmployeeAppRole(employee.id, existingRole.id)
+          message.success('已取消科室管理员权限')
+          await loadEmployees()
+        }
+        finally {
+          roleUpdatingEmployeeId.value = null
+        }
+      },
+    })
+    return
+  }
+
+  dialog.info({
+    title: '指定科室管理员',
+    content: `确定将「${employee.name}」指定为当前科室管理员？`,
+    positiveText: '指定',
+    negativeText: '取消',
+    async onPositiveClick() {
+      roleUpdatingEmployeeId.value = employee.id
+      try {
+        await assignEmployeeAppRole(employee.id, {
+          app_role: 'app:schedule_admin',
+          org_node_id: employee.org_node_id,
+        })
+        message.success('已指定为科室管理员')
+        await loadEmployees()
+      }
+      finally {
+        roleUpdatingEmployeeId.value = null
+      }
+    },
+  })
+}
+
 function openTransfer(employee: PlatformEmployee) {
   transferTarget.value = employee
-  transferForm.value = { target_org_node_id: '', reason: '' }
+  transferForm.value = {
+    target_org_node_id: getDefaultTransferDepartmentId(employee.org_node_id),
+    reason: '',
+  }
   transferVisible.value = true
 }
 
@@ -206,7 +326,7 @@ onMounted(loadEmployees)
       <section class="page-header">
         <div>
           <h2 class="page-title">员工管理</h2>
-          <p class="page-subtitle">维护机构内员工档案，并同步生成排班应用初始账号。</p>
+          <p class="page-subtitle">维护机构内员工档案，并将员工绑定到具体科室，同时同步生成排班应用初始账号。</p>
         </div>
       </section>
 
@@ -229,6 +349,7 @@ onMounted(loadEmployees)
                   <th>姓名</th>
                   <th>工号</th>
                   <th>职位</th>
+                  <th>应用角色</th>
                   <th>联系方式</th>
                   <th>状态</th>
                   <th>需改密</th>
@@ -245,6 +366,14 @@ onMounted(loadEmployees)
                   <td>{{ item.employee_no || '-' }}</td>
                   <td>{{ item.position || '-' }}</td>
                   <td>
+                    <div class="table-role-list">
+                      <n-tag v-for="role in employeeRoles(item.id)" :key="role.id" size="small" :type="role.app_role === 'app:schedule_admin' ? 'success' : 'default'">
+                        {{ appRoleLabel(role) }}
+                      </n-tag>
+                      <span v-if="!employeeRoles(item.id).length" class="table-muted">-</span>
+                    </div>
+                  </td>
+                  <td>
                     <div>{{ item.phone || '-' }}</div>
                     <div class="table-muted">{{ item.email || '-' }}</div>
                   </td>
@@ -257,13 +386,22 @@ onMounted(loadEmployees)
                   <td>
                     <div class="table-actions">
                       <n-button text type="primary" @click="openEdit(item)">编辑</n-button>
+                      <n-button text type="primary" @click="resetEmployeePassword(item)">重置密码</n-button>
+                      <n-button
+                        text
+                        :type="hasCurrentDepartmentAdminRole(item) ? 'warning' : 'success'"
+                        :loading="roleUpdatingEmployeeId === item.id"
+                        @click="toggleDepartmentAdmin(item)"
+                      >
+                        {{ hasCurrentDepartmentAdminRole(item) ? '撤管理员' : '设管理员' }}
+                      </n-button>
                       <n-button text type="warning" @click="openTransfer(item)">调动</n-button>
                       <n-button text type="error" @click="removeEmployee(item)">删除</n-button>
                     </div>
                   </td>
                 </tr>
                 <tr v-if="!filteredEmployees.length">
-                  <td colspan="8" class="table-empty">暂无员工数据</td>
+                  <td colspan="9" class="table-empty">暂无员工数据</td>
                 </tr>
               </tbody>
             </table>
@@ -274,8 +412,8 @@ onMounted(loadEmployees)
       <n-modal v-model:show="dialogVisible" preset="card" :title="editingEmployee ? '编辑员工' : '新增员工'" style="width: min(640px, calc(100vw - 32px))">
         <n-form :model="form" label-placement="left" label-width="88">
           <div class="form-grid two-column">
-            <n-form-item label="所属节点">
-              <n-select v-model:value="form.org_node_id" filterable :options="orgOptions" placeholder="选择员工所属组织节点" />
+            <n-form-item label="所属科室">
+              <n-select v-model:value="form.org_node_id" filterable :options="departmentOptions" placeholder="选择员工所属科室" />
             </n-form-item>
             <n-form-item label="姓名">
               <n-input v-model:value="form.name" placeholder="输入员工姓名" />
@@ -318,7 +456,7 @@ onMounted(loadEmployees)
         </p>
         <n-form :model="transferForm" label-placement="left" label-width="88">
           <n-form-item label="目标节点">
-            <n-select v-model:value="transferForm.target_org_node_id" filterable :options="orgOptions" placeholder="选择目标组织节点" />
+            <n-select v-model:value="transferForm.target_org_node_id" filterable :options="departmentOptions" placeholder="选择目标科室" />
           </n-form-item>
           <n-form-item label="调动原因">
             <n-input v-model:value="transferForm.reason" type="textarea" placeholder="可选，填写调动原因" :rows="2" />
@@ -362,7 +500,14 @@ onMounted(loadEmployees)
 
 .table-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.table-role-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .table-empty {

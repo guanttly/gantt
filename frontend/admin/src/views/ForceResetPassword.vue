@@ -53,6 +53,10 @@ const rules: FormRules = {
 }
 
 async function handleSubmit() {
+  if (loading.value) {
+    return
+  }
+
   try { await formRef.value?.validate() }
   catch { return }
 
@@ -88,9 +92,9 @@ async function handleSubmit() {
           <h1>重置登录密码</h1>
           <p>密码至少 8 位，建议同时包含大写字母、小写字母、数字和特殊字符。</p>
         </div>
-        <n-form ref="formRef" :model="form" :rules="rules" class="auth-form" @keyup.enter="handleSubmit">
+        <n-form ref="formRef" :model="form" :rules="rules" class="auth-form" @submit.prevent="handleSubmit">
           <n-form-item path="newPassword">
-            <n-input v-model:value="form.newPassword" type="password" placeholder="新密码" size="large" show-password-on="click">
+            <n-input v-model:value="form.newPassword" :disabled="loading" type="password" placeholder="新密码" size="large" show-password-on="click">
               <template #prefix>
                 <n-icon :size="18" color="#94a3b8">
                   <lock-closed-outline />
@@ -99,7 +103,7 @@ async function handleSubmit() {
             </n-input>
           </n-form-item>
           <n-form-item path="confirmPassword">
-            <n-input v-model:value="form.confirmPassword" type="password" placeholder="确认新密码" size="large" show-password-on="click">
+            <n-input v-model:value="form.confirmPassword" :disabled="loading" type="password" placeholder="确认新密码" size="large" show-password-on="click">
               <template #prefix>
                 <n-icon :size="18" color="#94a3b8">
                   <lock-closed-outline />
@@ -108,7 +112,7 @@ async function handleSubmit() {
             </n-input>
           </n-form-item>
           <n-form-item>
-            <n-button type="primary" size="large" :loading="loading" class="auth-submit" block @click="handleSubmit">确认重置</n-button>
+            <n-button type="primary" attr-type="submit" size="large" :loading="loading" class="auth-submit" block>确认重置</n-button>
           </n-form-item>
         </n-form>
       </section>

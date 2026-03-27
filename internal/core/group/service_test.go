@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"gantt-saas/internal/tenant"
@@ -15,6 +16,18 @@ type mockAppRoleSyncer struct {
 	synced  []string
 	revoked []string
 	cleaned []string
+}
+
+type mockOrgNodeResolver struct {
+	nodes map[string]tenant.OrgNode
+}
+
+func (m *mockOrgNodeResolver) GetByID(_ context.Context, id string) (*tenant.OrgNode, error) {
+	node, ok := m.nodes[id]
+	if !ok {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &node, nil
 }
 
 func (m *mockAppRoleSyncer) SyncRolesForGroupMember(_ context.Context, groupID, employeeID, _ string) error {
@@ -48,7 +61,12 @@ func setupGroupService(t *testing.T) (*Service, *gorm.DB, tenant.OrgNode) {
 		}
 	}
 	node := tenant.OrgNode{ID: "dept-001", NodeType: tenant.NodeTypeDepartment, Name: "心内科", Code: "dept-001", Path: "/dept-001", Depth: 0, IsLoginPoint: true, Status: tenant.StatusActive}
-	return NewService(NewRepository(db)), db, node
+	svc := NewService(NewRepository(db))
+	svc.SetOrgNodeResolver(&mockOrgNodeResolver{nodes: map[string]tenant.OrgNode{
+		node.ID:   node,
+		"org-001": {ID: "org-001", NodeType: tenant.NodeTypeOrganization, Name: "鼓楼医院", Code: "org-001", Path: "/org-001", Depth: 0, IsLoginPoint: true, Status: tenant.StatusActive},
+	}})
+	return svc, db, node
 }
 
 func TestService_AppRoleSyncHooks(t *testing.T) {
@@ -81,5 +99,18 @@ func TestService_AppRoleSyncHooks(t *testing.T) {
 	}
 	if len(syncer.cleaned) != 1 {
 		t.Fatalf("len(cleaned) = %d, want 1", len(syncer.cleaned))
+	}
+}
+
+func TestService_RejectNonDepartmentNode(t *testing.T) {
+	svc, _, _ := setupGroupService(t)
+	ctx := tenant.WithOrgNode(context.Background(), "org-001", "/org-001")
+
+	if _, err := svc.Create(ctx, CreateInput{Name: "院级分组"}); !errors.Is(err, ErrNotDeptNode) {
+		t.Fatalf("Create() error = %v, want %v", err, ErrNotDeptNode)
+	}
+
+	if _, err := svc.List(ctx); !errors.Is(err, ErrNotDeptNode) {
+		t.Fatalf("List() error = %v, want %v", err, ErrNotDeptNode)
 	}
 }

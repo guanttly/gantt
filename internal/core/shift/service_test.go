@@ -2,6 +2,7 @@ package shift
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"gantt-saas/internal/tenant"
@@ -10,6 +11,18 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+type mockOrgNodeResolver struct {
+	nodes map[string]tenant.OrgNode
+}
+
+func (m *mockOrgNodeResolver) GetByID(_ context.Context, id string) (*tenant.OrgNode, error) {
+	node, ok := m.nodes[id]
+	if !ok {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &node, nil
+}
 
 func setupShiftService(t *testing.T) (*Service, *gorm.DB, tenant.OrgNode) {
 	t.Helper()
@@ -59,7 +72,7 @@ func setupShiftService(t *testing.T) (*Service, *gorm.DB, tenant.OrgNode) {
 		}
 	}
 
-	node := tenant.OrgNode{
+	org := tenant.OrgNode{
 		ID:           "org-001",
 		NodeType:     tenant.NodeTypeOrganization,
 		Name:         "测试机构",
@@ -69,11 +82,29 @@ func setupShiftService(t *testing.T) (*Service, *gorm.DB, tenant.OrgNode) {
 		IsLoginPoint: true,
 		Status:       tenant.StatusActive,
 	}
-	if err := db.Create(&node).Error; err != nil {
+	orgParentID := org.ID
+	dept := tenant.OrgNode{
+		ID:           "dept-001",
+		ParentID:     &orgParentID,
+		NodeType:     tenant.NodeTypeDepartment,
+		Name:         "急诊科",
+		Code:         "dept-001",
+		Path:         "/org-001/dept-001",
+		Depth:        1,
+		IsLoginPoint: true,
+		Status:       tenant.StatusActive,
+	}
+	if err := db.Create(&[]tenant.OrgNode{org, dept}).Error; err != nil {
 		t.Fatalf("创建测试组织节点失败: %v", err)
 	}
 
-	return NewService(NewRepository(db)), db, node
+	svc := NewService(NewRepository(db))
+	svc.SetOrgNodeResolver(&mockOrgNodeResolver{nodes: map[string]tenant.OrgNode{
+		org.ID:  org,
+		dept.ID: dept,
+	}})
+
+	return svc, db, dept
 }
 
 func TestService_ToggleStatus(t *testing.T) {
@@ -162,5 +193,18 @@ func TestService_ListAvailable(t *testing.T) {
 	}
 	if available[0].ID != "shift-active" {
 		t.Fatalf("available[0].id = %q, want %q", available[0].ID, "shift-active")
+	}
+}
+
+func TestService_RejectNonDepartmentNode(t *testing.T) {
+	svc, _, _ := setupShiftService(t)
+	ctx := tenant.WithOrgNode(context.Background(), "org-001", "/org-001")
+
+	if _, err := svc.Create(ctx, CreateInput{Name: "白班", Code: "day", StartTime: "08:00", EndTime: "16:00", Duration: 8}); !errors.Is(err, ErrNotDeptNode) {
+		t.Fatalf("Create() error = %v, want %v", err, ErrNotDeptNode)
+	}
+
+	if _, err := svc.List(ctx); !errors.Is(err, ErrNotDeptNode) {
+		t.Fatalf("List() error = %v, want %v", err, ErrNotDeptNode)
 	}
 }

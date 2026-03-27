@@ -117,6 +117,13 @@ export interface UserInfoResponse {
 }
 
 export type AppPermission =
+  | 'app-role:manage'
+  | 'group:view:node'
+  | 'group:manage'
+  | 'shift:view:node'
+  | 'shift:manage'
+  | 'rule:view:node'
+  | 'rule:manage'
   | 'schedule:create'
   | 'schedule:execute'
   | 'schedule:adjust'
@@ -139,3 +146,5 @@ export const ROLE_HIERARCHY = [
 ] as const
 
 export type RoleName = (typeof ROLE_HIERARCHY)[number]
+
+export type AppRoleName = 'app:schedule_admin' | 'app:scheduler' | 'app:leave_approver'

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BarChartOutline, BusinessOutline, DocumentTextOutline, ListOutline, LogOutOutline, PeopleOutline, PersonCircleOutline, PersonOutline, ReceiptOutline, SettingsOutline, ShieldCheckmarkOutline, TimeOutline } from '@vicons/ionicons5'
+import { BarChartOutline, BusinessOutline, DocumentTextOutline, LogOutOutline, PeopleOutline, PersonCircleOutline, PersonOutline, ReceiptOutline, SettingsOutline } from '@vicons/ionicons5'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NButton, NIcon } from 'naive-ui'
@@ -12,19 +12,64 @@ const auth = useAuthStore()
 
 const menuItems = [
   { path: '/dashboard', label: '运营看板', icon: BarChartOutline, requiredRole: RoleName.PlatformAdmin },
-  { path: '/orgs', label: '机构管理', icon: BusinessOutline, requiredRole: RoleName.PlatformAdmin },
-  { path: '/employees', label: '员工管理', icon: PeopleOutline, requiredRole: RoleName.DeptAdmin },
-  { path: '/groups', label: '分组管理', icon: ListOutline, requiredRole: RoleName.DeptAdmin },
-  { path: '/shifts', label: '班次管理', icon: TimeOutline, requiredRole: RoleName.DeptAdmin },
-  { path: '/rules', label: '规则管理', icon: DocumentTextOutline, requiredRole: RoleName.DeptAdmin },
+  { path: '/orgs', label: '组织管理', icon: BusinessOutline, requiredRole: RoleName.OrgAdmin },
+  { path: '/employees', label: '员工管理', icon: PeopleOutline, requiredRole: RoleName.OrgAdmin },
   { path: '/platform-users', label: '平台账号', icon: PersonOutline, requiredRole: RoleName.OrgAdmin },
-  { path: '/app-permissions', label: '应用权限', icon: ShieldCheckmarkOutline, requiredRole: RoleName.DeptAdmin },
   { path: '/subscriptions', label: '订阅管理', icon: ReceiptOutline, requiredRole: RoleName.PlatformAdmin },
   { path: '/audit', label: '审计日志', icon: DocumentTextOutline, requiredRole: RoleName.PlatformAdmin },
   { path: '/config', label: '系统配置', icon: SettingsOutline, requiredRole: RoleName.PlatformAdmin },
 ]
 
-const visibleMenuItems = computed(() => menuItems.filter(item => auth.hasRole(item.requiredRole)))
+const visibleMenuItems = computed(() => menuItems.filter(item => (item.requiredRole ? auth.hasRole(item.requiredRole) : true)))
+
+const roleLabelMap: Record<RoleName, string> = {
+	[RoleName.Employee]: '普通员工',
+	[RoleName.Scheduler]: '排班负责人',
+	[RoleName.DeptAdmin]: '科室管理员',
+	[RoleName.OrgAdmin]: '机构管理员',
+	[RoleName.PlatformAdmin]: '平台管理员',
+}
+
+const layoutMetaMap: Record<RoleName, { badge: string, title: string, subtitle: string }> = {
+  [RoleName.Employee]: {
+    badge: '员工视图',
+    title: '员工工作台',
+    subtitle: '查看个人排班、请假与基础信息。',
+  },
+  [RoleName.Scheduler]: {
+    badge: '排班控制台',
+    title: '排班业务后台',
+    subtitle: '聚焦分组排班、班次配置与业务规则执行。',
+  },
+  [RoleName.DeptAdmin]: {
+    badge: '科室控制台',
+    title: '科室业务后台',
+    subtitle: '维护科室员工、排班分组、班次与排班规则。',
+  },
+  [RoleName.OrgAdmin]: {
+    badge: '机构控制台',
+    title: '机构管理后台',
+    subtitle: '负责人事、组织节点、后台账号与管理能力下放，不直接处理科室排班业务。',
+  },
+  [RoleName.PlatformAdmin]: {
+    badge: '平台控制台',
+    title: '平台管理后台',
+    subtitle: '多租户管理、订阅运营与系统配置统一收口。',
+  },
+}
+
+const currentRoleLabel = computed(() => roleLabelMap[auth.currentRole] || '未设置角色')
+const currentLayoutMeta = computed(() => {
+  const base = layoutMetaMap[auth.currentRole] || layoutMetaMap[RoleName.PlatformAdmin]
+  if (auth.currentRole === RoleName.OrgAdmin && auth.currentNode?.node_name) {
+    return {
+      ...base,
+      title: auth.currentNode.node_name,
+      subtitle: `负责人事、组织节点、后台账号与管理能力下放，当前管理范围为 ${auth.currentNode.node_name}。`,
+    }
+  }
+  return base
+})
 
 const activePath = computed(() => {
   const p = route.path
@@ -46,9 +91,9 @@ async function handleLogout() {
   <div class="admin-layout">
     <aside class="sidebar">
       <div class="sidebar-header">
-        <div class="sidebar-badge">平台控制台</div>
-        <h2 class="sidebar-title">平台管理后台</h2>
-        <p class="sidebar-subtitle">多租户管理、订阅运营与系统配置统一收口。</p>
+        <div class="sidebar-badge">{{ currentLayoutMeta.badge }}</div>
+        <h2 class="sidebar-title">{{ currentLayoutMeta.title }}</h2>
+        <p class="sidebar-subtitle">{{ currentLayoutMeta.subtitle }}</p>
       </div>
       <nav class="sidebar-menu">
         <div
@@ -70,7 +115,7 @@ async function handleLogout() {
           <n-icon :size="24" color="rgba(226, 232, 240, 0.86)"><person-circle-outline /></n-icon>
           <div class="user-meta">
             <span v-if="auth.user" class="user-name">{{ auth.user.username }}</span>
-            <span class="user-role">平台管理员</span>
+            <span class="user-role">{{ currentRoleLabel }}</span>
           </div>
         </div>
         <n-button text class="logout-button" @click="handleLogout">
@@ -84,7 +129,7 @@ async function handleLogout() {
 
     <div class="content-area">
       <header class="content-header">
-        <h1 class="content-heading">{{ visibleMenuItems.find(item => item.path === activePath)?.label || '平台管理' }}</h1>
+        <h1 class="content-heading">{{ visibleMenuItems.find(item => item.path === activePath)?.label || '管理后台' }}</h1>
       </header>
       <main class="main-content">
         <router-view />

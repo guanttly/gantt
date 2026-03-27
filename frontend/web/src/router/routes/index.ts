@@ -59,6 +59,31 @@ export const RootRoute: RouteRecordRaw[] = [{
     },
 
     {
+      path: 'groups',
+      name: 'GroupManagement',
+      component: () => import('@/views/groups/GroupList.vue'),
+      meta: { title: () => '分组管理', requiredAnyPermissions: ['group:view:node', 'group:manage'] },
+    },
+    {
+      path: 'shifts',
+      name: 'ShiftManagement',
+      component: () => import('@/views/shifts/ShiftList.vue'),
+      meta: { title: () => '班次管理', requiredAnyPermissions: ['shift:view:node', 'shift:manage'] },
+    },
+    {
+      path: 'rules',
+      name: 'RuleManagement',
+      component: () => import('@/views/rules/RuleList.vue'),
+      meta: { title: () => '规则管理', requiredAnyPermissions: ['rule:view:node', 'rule:manage'] },
+    },
+    {
+      path: 'app-permissions',
+      name: 'AppPermissionManagement',
+      component: () => import('@/views/permissions/AppPermissionManagement.vue'),
+      meta: { title: () => '应用权限', requiredPermission: 'app-role:manage' },
+    },
+
+    {
       path: 'management-admin',
       name: 'ManagementMoved',
       component: () => import('@/views/notice/ManagementMoved.vue'),
@@ -128,15 +153,13 @@ const LegacyRedirects: RouteRecordRaw[] = [
   { path: '/workspace/scheduling/create', redirect: '/scheduling/create' },
   { path: '/workspace/scheduling/history', redirect: '/scheduling' },
   { path: '/management/employee', redirect: '/management-admin' },
-  { path: '/management/shift', redirect: '/management-admin' },
-  { path: '/management/group', redirect: '/management-admin' },
-  { path: '/management/scheduling-rule', redirect: '/management-admin' },
+  { path: '/management/shift', redirect: '/shifts' },
+  { path: '/management/group', redirect: '/groups' },
+  { path: '/management/scheduling-rule', redirect: '/rules' },
   { path: '/management/leave', redirect: '/leaves' },
   { path: '/management/department', redirect: '/management-admin' },
+  { path: '/management/app-permissions', redirect: '/app-permissions' },
   { path: '/employees', redirect: '/management-admin' },
-  { path: '/shifts', redirect: '/management-admin' },
-  { path: '/groups', redirect: '/management-admin' },
-  { path: '/rules', redirect: '/management-admin' },
   { path: '/org', redirect: '/management-admin' },
   { path: '/settings', redirect: '/management-admin' },
 ]

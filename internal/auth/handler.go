@@ -64,6 +64,29 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, result)
 }
 
+// AdminLogin 后台账号登录。
+// POST /api/v1/admin/auth/login
+func (h *Handler) AdminLogin(w http.ResponseWriter, r *http.Request) {
+	var input LoginInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		response.BadRequest(w, "请求参数格式错误")
+		return
+	}
+
+	if input.Username == "" || input.Password == "" {
+		response.BadRequest(w, "username、password 为必填项")
+		return
+	}
+
+	result, err := h.svc.AdminLogin(r.Context(), input)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.OK(w, result)
+}
+
 // RefreshToken 刷新 Token。
 // POST /api/v1/auth/refresh
 func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
@@ -226,6 +249,8 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrUserNotFound):
 		response.NotFound(w, err.Error())
 	case errors.Is(err, ErrUserDisabled):
+		response.Forbidden(w, err.Error())
+	case errors.Is(err, ErrAdminLoginRequired):
 		response.Forbidden(w, err.Error())
 	case errors.Is(err, ErrAccountLocked):
 		response.Error(w, http.StatusTooManyRequests, "TOO_MANY_REQUESTS", err.Error())

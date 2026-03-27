@@ -140,6 +140,44 @@ func TestPlatformUserService_Create(t *testing.T) {
 	}
 }
 
+func TestPlatformUserService_Create_PlatformAdminCanManageSiblingOrganizations(t *testing.T) {
+	svc, db := setupPlatformUserService(t)
+	ctx := tenant.WithOrgNode(context.Background(), "platform-root-id", "/platform-root-id")
+	ctx = auth.WithClaims(ctx, &auth.Claims{
+		UserID:      "platform-admin",
+		OrgNodeID:   "platform-root-id",
+		OrgNodePath: "/platform-root-id",
+		RoleName:    string(auth.RolePlatformAdmin),
+	})
+
+	siblingOrg := tenant.OrgNode{
+		ID:           "org-sibling-001",
+		NodeType:     tenant.NodeTypeOrganization,
+		Name:         "鼓楼医院",
+		Code:         "gulou",
+		Path:         "/org-sibling-001",
+		Depth:        0,
+		IsLoginPoint: true,
+		Status:       tenant.StatusActive,
+	}
+	if err := db.Create(&siblingOrg).Error; err != nil {
+		t.Fatalf("创建兄弟机构节点失败: %v", err)
+	}
+
+	result, err := svc.Create(ctx, CreatePlatformUserInput{
+		Username:  "gulou_admin",
+		Email:     "gulou-admin@example.com",
+		OrgNodeID: siblingOrg.ID,
+		RoleName:  string(auth.RoleOrgAdmin),
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if result.User.Roles[0].OrgNodeID != siblingOrg.ID {
+		t.Fatalf("org_node_id = %q, want %q", result.User.Roles[0].OrgNodeID, siblingOrg.ID)
+	}
+}
+
 func TestPlatformUserService_ResetPassword(t *testing.T) {
 	svc, db := setupPlatformUserService(t)
 	ctx := context.Background()
@@ -150,8 +188,8 @@ func TestPlatformUserService_ResetPassword(t *testing.T) {
 
 	user := auth.User{
 		ID:           "user-001",
-		Username:     "dept_admin_001",
-		Email:        "dept-admin-001@example.com",
+		Username:     "org_admin_001",
+		Email:        "org-admin-001@example.com",
 		PasswordHash: string(oldHash),
 		Status:       auth.UserStatusActive,
 	}
@@ -161,8 +199,8 @@ func TestPlatformUserService_ResetPassword(t *testing.T) {
 	if err := db.Create(&auth.UserNodeRole{
 		ID:        "unr-001",
 		UserID:    user.ID,
-		OrgNodeID: "dept-001",
-		RoleID:    auth.RoleIDDeptAdmin,
+		OrgNodeID: "org-001",
+		RoleID:    auth.RoleIDOrgAdmin,
 	}).Error; err != nil {
 		t.Fatalf("创建测试角色绑定失败: %v", err)
 	}
@@ -190,15 +228,15 @@ func TestPlatformUserService_ResetPassword(t *testing.T) {
 	}
 }
 
-func TestPlatformUserService_ListAndDisable(t *testing.T) {
+func TestPlatformUserService_ListAndStatusOps(t *testing.T) {
 	svc, db := setupPlatformUserService(t)
 	ctx := context.Background()
 	phone := "13900139000"
 
 	user := auth.User{
 		ID:           "user-002",
-		Username:     "dept_admin_list",
-		Email:        "dept-admin-list@example.com",
+		Username:     "org_admin_list",
+		Email:        "org-admin-list@example.com",
 		Phone:        &phone,
 		PasswordHash: "hashed-password",
 		Status:       auth.UserStatusActive,
@@ -209,20 +247,20 @@ func TestPlatformUserService_ListAndDisable(t *testing.T) {
 	if err := db.Create(&auth.UserNodeRole{
 		ID:        "unr-002",
 		UserID:    user.ID,
-		OrgNodeID: "dept-001",
-		RoleID:    auth.RoleIDDeptAdmin,
+		OrgNodeID: "org-001",
+		RoleID:    auth.RoleIDOrgAdmin,
 	}).Error; err != nil {
 		t.Fatalf("创建测试角色绑定失败: %v", err)
 	}
 
-	items, err := svc.List(ctx, "dept-001")
+	items, err := svc.List(ctx, "org-001")
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
 	if len(items) != 1 {
 		t.Fatalf("len(items) = %d, want 1", len(items))
 	}
-	if len(items[0].Roles) != 1 || items[0].Roles[0].RoleName != string(auth.RoleDeptAdmin) {
+	if len(items[0].Roles) != 1 || items[0].Roles[0].RoleName != string(auth.RoleOrgAdmin) {
 		t.Fatal("平台账号列表未返回正确角色信息")
 	}
 
@@ -238,8 +276,37 @@ func TestPlatformUserService_ListAndDisable(t *testing.T) {
 		t.Fatalf("status = %q, want %q", updated.Status, auth.UserStatusDisabled)
 	}
 
+	if err := svc.Enable(ctx, user.ID); err != nil {
+		t.Fatalf("Enable() error = %v", err)
+	}
+	if err := db.Where("id = ?", user.ID).First(&updated).Error; err != nil {
+		t.Fatalf("查询启用后的平台账号失败: %v", err)
+	}
+	if updated.Status != auth.UserStatusActive {
+		t.Fatalf("status = %q, want %q", updated.Status, auth.UserStatusActive)
+	}
+
 	if err := svc.Disable(ctx, user.ID, user.ID); err == nil {
 		t.Fatal("禁用自己应返回错误")
+	}
+	if err := svc.Delete(ctx, user.ID, user.ID); err == nil {
+		t.Fatal("删除自己应返回错误")
+	}
+	if err := svc.Delete(ctx, user.ID, "another-user"); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	var count int64
+	if err := db.Model(&auth.User{}).Where("id = ?", user.ID).Count(&count).Error; err != nil {
+		t.Fatalf("查询删除后的平台账号失败: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("user count = %d, want 0", count)
+	}
+	if err := db.Model(&auth.UserNodeRole{}).Where("user_id = ?", user.ID).Count(&count).Error; err != nil {
+		t.Fatalf("查询删除后的角色绑定失败: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("user node role count = %d, want 0", count)
 	}
 }
 
@@ -270,12 +337,15 @@ func TestPlatformUserService_List_RespectsManageScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("len(items) = %d, want 2", len(items))
+	if len(items) != 1 {
+		t.Fatalf("len(items) = %d, want 1", len(items))
 	}
 	for _, item := range items {
 		if item.ID == "user-platform" {
 			t.Fatal("org_admin 不应看到平台根上的 platform_admin 账号")
+		}
+		if item.ID == "user-dept" {
+			t.Fatal("平台账号列表不应再返回 dept_admin 业务账号")
 		}
 		if item.ID == "user-employee" {
 			t.Fatal("平台账号列表不应混入 employee 业务账号")

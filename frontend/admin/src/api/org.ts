@@ -12,6 +12,13 @@ export const ORG_NODE_TYPE_LABELS: Record<OrgNodeType, string> = {
   custom: '自定义',
 }
 
+const ALLOWED_CHILD_NODE_TYPES: Record<OrgNodeType, OrgNodeType[]> = {
+  organization: ['campus', 'department', 'custom'],
+  campus: ['department', 'custom'],
+  custom: ['department', 'custom'],
+  department: [],
+}
+
 export interface OrgTreeNode {
   id: string
   parent_id?: string
@@ -40,6 +47,15 @@ export interface UpdateOrgNodeRequest {
 
 export function isProtectedOrgNode(node: OrgTreeNode) {
   return !node.parent_id && node.code === PLATFORM_ROOT_CODE
+}
+
+export function getAllowedChildNodeTypes(parentType: OrgNodeType) {
+  return ALLOWED_CHILD_NODE_TYPES[parentType] || []
+}
+
+export function canCreateChildNode(node: OrgTreeNode | OrgNodeType) {
+  const parentType = typeof node === 'string' ? node : node.node_type
+  return getAllowedChildNodeTypes(parentType).length > 0
 }
 
 export function getOrgTree() {

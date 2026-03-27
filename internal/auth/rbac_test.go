@@ -22,8 +22,20 @@ func TestHasPermission_OrgAdmin(t *testing.T) {
 	if !HasPermission(string(RoleOrgAdmin), "employee:create") {
 		t.Error("org_admin should have employee:create")
 	}
-	if !HasPermission(string(RoleOrgAdmin), "schedule:create") {
-		t.Error("org_admin should have schedule:create")
+	if HasPermission(string(RoleOrgAdmin), "schedule:create") {
+		t.Error("org_admin should NOT have schedule:create")
+	}
+}
+
+func TestHasPermission_DeptAdminResidualRole(t *testing.T) {
+	if !HasPermission(string(RoleDeptAdmin), "employee:read") {
+		t.Error("dept_admin residual role should keep employee:read for compatibility")
+	}
+	if HasPermission(string(RoleDeptAdmin), "schedule:create") {
+		t.Error("dept_admin should NOT have schedule:create")
+	}
+	if HasPermission(string(RoleDeptAdmin), "rule:create") {
+		t.Error("dept_admin should NOT have rule:create")
 	}
 }
 

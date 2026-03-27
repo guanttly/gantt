@@ -2,9 +2,13 @@
 import type { Shift } from '@/types/shift'
 import { Delete, Edit, Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { createShift, deleteShift, listShifts, updateShift } from '@/api/shifts'
 import { usePagination } from '@/composables/usePagination'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
+const canManageShifts = computed(() => auth.hasPermission('shift:manage'))
 
 const { loading, items, total, currentPage, currentPageSize, keyword, handlePageChange, handleSizeChange, refresh } = usePagination<Shift>({
   fetchFn: listShifts,
@@ -115,7 +119,7 @@ async function handleDelete(row: Shift) {
         style="width: 240px"
         :prefix-icon="Search"
       />
-      <el-button type="primary" :icon="Plus" @click="handleAdd">
+      <el-button v-if="canManageShifts" type="primary" :icon="Plus" @click="handleAdd">
         新增班次
       </el-button>
     </div>
@@ -141,7 +145,7 @@ async function handleDelete(row: Shift) {
         </template>
       </el-table-column>
       <el-table-column prop="description" label="描述" />
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column v-if="canManageShifts" label="操作" width="160" fixed="right">
         <template #default="{ row }">
           <el-button :icon="Edit" link type="primary" @click="handleEdit(row)">
             编辑

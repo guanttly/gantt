@@ -148,6 +148,8 @@ func (h *Handler) AddDependency(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, ErrNotDeptNode):
+		response.Forbidden(w, err.Error())
 	case errors.Is(err, ErrShiftNotFound):
 		response.NotFound(w, err.Error())
 	case errors.Is(err, ErrShiftCodeDup):

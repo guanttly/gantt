@@ -32,43 +32,19 @@ const router = createRouter({
           path: 'orgs',
           name: 'OrgManagement',
           component: () => import('@/views/OrgManagement.vue'),
-          meta: { title: '机构管理', requiredRole: RoleName.PlatformAdmin },
+          meta: { title: '组织管理', requiredRole: RoleName.OrgAdmin },
         },
         {
           path: 'employees',
           name: 'EmployeeManagement',
           component: () => import('@/views/EmployeeManagement.vue'),
-          meta: { title: '员工管理', requiredRole: RoleName.DeptAdmin },
-        },
-        {
-          path: 'groups',
-          name: 'GroupManagement',
-          component: () => import('@/views/GroupManagement.vue'),
-          meta: { title: '分组管理', requiredRole: RoleName.DeptAdmin },
-        },
-        {
-          path: 'shifts',
-          name: 'ShiftManagement',
-          component: () => import('@/views/ShiftManagement.vue'),
-          meta: { title: '班次管理', requiredRole: RoleName.DeptAdmin },
-        },
-        {
-          path: 'rules',
-          name: 'RuleManagement',
-          component: () => import('@/views/RuleManagement.vue'),
-          meta: { title: '规则管理', requiredRole: RoleName.DeptAdmin },
+          meta: { title: '员工管理', requiredRole: RoleName.OrgAdmin },
         },
         {
           path: 'platform-users',
           name: 'PlatformUserManagement',
           component: () => import('@/views/PlatformUserManagement.vue'),
           meta: { title: '平台账号', requiredRole: RoleName.OrgAdmin },
-        },
-        {
-          path: 'app-permissions',
-          name: 'AppPermissionsManagement',
-          component: () => import('@/views/AppPermissionsManagement.vue'),
-          meta: { title: '应用权限', requiredRole: RoleName.DeptAdmin },
         },
         {
           path: 'subscriptions',
@@ -126,19 +102,26 @@ router.beforeEach(async (to, _from, next) => {
     return next('/force-reset-password')
   }
 
-  // 允许进入管理后台的角色：平台管理员 / 机构管理员 / 科室管理员
-  if (![RoleName.PlatformAdmin, RoleName.OrgAdmin, RoleName.DeptAdmin].includes(auth.currentRole)) {
+  // 允许进入管理后台的角色：平台管理员 / 机构管理员
+  if (![RoleName.PlatformAdmin, RoleName.OrgAdmin].includes(auth.currentRole)) {
     auth.logout()
     return next('/login')
   }
 
   if (to.path === '/dashboard' && !auth.hasRole(RoleName.PlatformAdmin)) {
-    return next('/employees')
+    return next('/orgs')
+  }
+
+  if (to.meta.exactRole && !auth.hasExactRole(to.meta.exactRole as RoleName)) {
+    if (auth.hasRole(RoleName.OrgAdmin)) {
+      return next('/orgs')
+    }
+    return next('/')
   }
 
   if (to.meta.requiredRole && !auth.hasRole(to.meta.requiredRole as RoleName)) {
-    if (auth.hasRole(RoleName.DeptAdmin)) {
-      return next('/employees')
+    if (auth.hasRole(RoleName.OrgAdmin)) {
+      return next('/orgs')
     }
     return next('/')
   }

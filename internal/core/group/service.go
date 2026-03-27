@@ -15,6 +15,7 @@ var (
 	ErrGroupNotFound  = errors.New("分组不存在")
 	ErrMemberExists   = errors.New("成员已在分组中")
 	ErrMemberNotFound = errors.New("成员不在分组中")
+	ErrNotDeptNode    = errors.New("只有科室级（department）节点可以管理排班分组")
 )
 
 // CreateInput 创建分组的输入参数。
@@ -31,8 +32,13 @@ type UpdateInput struct {
 
 // Service 分组业务逻辑层。
 type Service struct {
-	repo          *Repository
-	appRoleSyncer AppRoleSyncer
+	repo            *Repository
+	appRoleSyncer   AppRoleSyncer
+	orgNodeResolver OrgNodeTypeChecker
+}
+
+type OrgNodeTypeChecker interface {
+	GetByID(ctx context.Context, id string) (*tenant.OrgNode, error)
 }
 
 type AppRoleSyncer interface {
@@ -50,8 +56,34 @@ func (s *Service) SetAppRoleSyncer(syncer AppRoleSyncer) {
 	s.appRoleSyncer = syncer
 }
 
+func (s *Service) SetOrgNodeResolver(resolver OrgNodeTypeChecker) {
+	s.orgNodeResolver = resolver
+}
+
+func (s *Service) ensureDepartmentNode(ctx context.Context) error {
+	orgNodeID := tenant.GetOrgNodeID(ctx)
+	if orgNodeID == "" {
+		return fmt.Errorf("缺少组织节点信息")
+	}
+	if s.orgNodeResolver == nil {
+		return nil
+	}
+	node, err := s.orgNodeResolver.GetByID(ctx, orgNodeID)
+	if err != nil {
+		return fmt.Errorf("查询组织节点失败: %w", err)
+	}
+	if !tenant.IsLeafNodeType(node.NodeType) {
+		return ErrNotDeptNode
+	}
+	return nil
+}
+
 // Create 创建分组。
 func (s *Service) Create(ctx context.Context, input CreateInput) (*EmployeeGroup, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	orgNodeID := tenant.GetOrgNodeID(ctx)
 	if orgNodeID == "" {
 		return nil, fmt.Errorf("缺少组织节点信息")
@@ -75,6 +107,10 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*EmployeeGroup
 
 // GetByID 获取分组详情。
 func (s *Service) GetByID(ctx context.Context, id string) (*EmployeeGroup, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	g, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -87,6 +123,10 @@ func (s *Service) GetByID(ctx context.Context, id string) (*EmployeeGroup, error
 
 // Update 更新分组信息。
 func (s *Service) Update(ctx context.Context, id string, input UpdateInput) (*EmployeeGroup, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	g, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -111,6 +151,10 @@ func (s *Service) Update(ctx context.Context, id string, input UpdateInput) (*Em
 
 // Delete 删除分组（同时删除成员关联）。
 func (s *Service) Delete(ctx context.Context, id string) error {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return err
+	}
+
 	_, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -134,11 +178,19 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 
 // List 查询分组列表。
 func (s *Service) List(ctx context.Context) ([]EmployeeGroup, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	return s.repo.List(ctx)
 }
 
 // GetMembers 获取分组成员列表。
 func (s *Service) GetMembers(ctx context.Context, groupID string) ([]GroupMember, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	// 验证分组存在
 	_, err := s.repo.GetByID(ctx, groupID)
 	if err != nil {
@@ -153,6 +205,10 @@ func (s *Service) GetMembers(ctx context.Context, groupID string) ([]GroupMember
 
 // AddMember 添加成员到分组。
 func (s *Service) AddMember(ctx context.Context, groupID, employeeID, grantedBy string) (*GroupMember, error) {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return nil, err
+	}
+
 	orgNodeID := tenant.GetOrgNodeID(ctx)
 	if orgNodeID == "" {
 		return nil, fmt.Errorf("缺少组织节点信息")
@@ -201,6 +257,10 @@ func (s *Service) AddMember(ctx context.Context, groupID, employeeID, grantedBy 
 
 // RemoveMember 从分组中移除成员。
 func (s *Service) RemoveMember(ctx context.Context, groupID, employeeID string) error {
+	if err := s.ensureDepartmentNode(ctx); err != nil {
+		return err
+	}
+
 	_, err := s.repo.GetMember(ctx, groupID, employeeID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

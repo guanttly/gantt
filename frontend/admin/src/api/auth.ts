@@ -3,7 +3,7 @@ import type { LoginRequest, LoginResponse, UserInfoResponse } from '@/types/auth
 import client from './client'
 
 export function login(data: LoginRequest) {
-  return client.post<LoginResponse>('/auth/login', data).then(r => r.data)
+  return client.post<LoginResponse>('/admin/auth/login', data).then(r => r.data)
 }
 
 export function refreshToken(data: { refresh_token: string }) {
