@@ -9,18 +9,28 @@ import (
 	"gorm.io/gorm"
 )
 
+// ColumnScope 仅查指定列匹配当前节点的数据。
+func ColumnScope(column string, nodeID string) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where(column+" = ?", nodeID)
+	}
+}
+
+// ColumnTreeScope 查指定列匹配当前节点及所有后代节点的数据。
+func ColumnTreeScope(column string, nodeIDs []string) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		return db.Where(column+" IN ?", nodeIDs)
+	}
+}
+
 // NodeScope 仅查本节点数据。
 func NodeScope(nodeID string) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("org_node_id = ?", nodeID)
-	}
+	return ColumnScope("org_node_id", nodeID)
 }
 
 // NodeTreeScope 查本节点和所有后代节点数据。
 func NodeTreeScope(nodeIDs []string) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("org_node_id IN ?", nodeIDs)
-	}
+	return ColumnTreeScope("org_node_id", nodeIDs)
 }
 
 // GetDescendantNodeIDs 获取某节点及其所有后代节点的 ID 列表。
@@ -35,19 +45,28 @@ func GetDescendantNodeIDs(db *gorm.DB, nodePath string) ([]string, error) {
 
 // ApplyScope 根据 Context 自动应用 GORM 组织节点过滤。
 func ApplyScope(ctx context.Context, db *gorm.DB) *gorm.DB {
+	return ApplyScopeOnColumn(ctx, db, "org_node_id")
+}
+
+// ApplyScopeOnColumn 根据 Context 自动应用 GORM 组织节点过滤到指定列。
+func ApplyScopeOnColumn(ctx context.Context, db *gorm.DB, column string) *gorm.DB {
 	nodeID := GetOrgNodeID(ctx)
 	if nodeID == "" {
 		return db
+	}
+	column = strings.TrimSpace(column)
+	if column == "" {
+		column = "org_node_id"
 	}
 	if IsScopeTree(ctx) {
 		nodePath := GetOrgNodePath(ctx)
 		nodeIDs, err := GetDescendantNodeIDs(db, nodePath)
 		if err != nil || len(nodeIDs) == 0 {
-			return db.Scopes(NodeScope(nodeID))
+			return db.Scopes(ColumnScope(column, nodeID))
 		}
-		return db.Scopes(NodeTreeScope(nodeIDs))
+		return db.Scopes(ColumnTreeScope(column, nodeIDs))
 	}
-	return db.Scopes(NodeScope(nodeID))
+	return db.Scopes(ColumnScope(column, nodeID))
 }
 
 // platformTables 平台级表白名单，不需要 org_node_id 条件。

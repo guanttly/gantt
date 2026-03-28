@@ -31,8 +31,13 @@ func RegisterAppRoutes(r chi.Router, h *Handler, appRoleSvc *approle.Service) {
 		r.With(approle.RequireAnyPermission(appRoleSvc, "schedule:create")).Post("/", h.Create)
 		r.With(approle.RequireAnyPermission(appRoleSvc, "schedule:view:node", "schedule:view:all")).Get("/", h.List)
 		r.With(approle.RequireAnyPermission(appRoleSvc, "schedule:view:node", "schedule:view:all")).Get("/{id}", h.GetByID)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "schedule:create")).Delete("/{id}", h.Delete)
 		r.With(approle.RequireAnyPermission(appRoleSvc, "schedule:execute")).Put("/{id}/execute", h.Generate)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "schedule:view:node", "schedule:view:all")).Get("/{id}/assignments", h.GetAssignments)
 		r.With(approle.RequireAnyPermission(appRoleSvc, "schedule:adjust")).Put("/{id}/adjust", h.AdjustAssignments)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "schedule:adjust")).Post("/{id}/validate", h.Validate)
 		r.With(approle.RequireAnyPermission(appRoleSvc, "schedule:publish")).Put("/{id}/publish", h.Publish)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "schedule:view:node", "schedule:view:all")).Get("/{id}/changes", h.GetChanges)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "schedule:view:node", "schedule:view:all")).Get("/{id}/summary", h.GetSummary)
 	})
 }

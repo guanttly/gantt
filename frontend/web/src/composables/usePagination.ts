@@ -1,14 +1,18 @@
 // 分页通用逻辑
-import type { ListParams, PaginatedResponse } from '@/types/api'
+import type { ListParams, ListResponse, PaginatedResponse } from '@/types/api'
 import { ref, watch } from 'vue'
 
 interface UsePaginationOptions<T> {
   /** API 请求函数 */
-  fetchFn: (params: ListParams) => Promise<PaginatedResponse<T>>
+  fetchFn: (params: ListParams) => Promise<ListResponse<T>>
   /** 默认分页大小 */
   pageSize?: number
   /** 是否立即加载 */
   immediate?: boolean
+}
+
+function isPaginatedResponse<T>(value: ListResponse<T>): value is PaginatedResponse<T> {
+  return !Array.isArray(value)
 }
 
 export function usePagination<T>(options: UsePaginationOptions<T>) {
@@ -32,8 +36,14 @@ export function usePagination<T>(options: UsePaginationOptions<T>) {
         params.keyword = keyword.value
 
       const res = await fetchFn(params)
-      items.value = res.items
-      total.value = res.total
+      if (isPaginatedResponse(res)) {
+        items.value = res.items
+        total.value = res.total
+        return
+      }
+
+      items.value = res
+      total.value = res.length
     }
     finally {
       loading.value = false

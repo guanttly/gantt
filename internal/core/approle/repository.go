@@ -39,6 +39,20 @@ func (r *Repository) GetEmployeeByID(ctx context.Context, id string) (*employeeR
 	return &row, nil
 }
 
+func (r *Repository) ListEmployeesByIDs(ctx context.Context, ids []string) ([]employeeRecord, error) {
+	if len(ids) == 0 {
+		return []employeeRecord{}, nil
+	}
+	var rows []employeeRecord
+	err := r.db.WithContext(tenant.SkipTenantGuard(ctx)).
+		Table("employees").
+		Select("employees.id, employees.org_node_id, employees.name, employees.status, org_nodes.path").
+		Joins("JOIN org_nodes ON org_nodes.id = employees.org_node_id").
+		Where("employees.id IN ?", ids).
+		Scan(&rows).Error
+	return rows, err
+}
+
 func (r *Repository) GetGroupByID(ctx context.Context, id string) (*groupRecord, error) {
 	var row groupRecord
 	err := r.db.WithContext(tenant.SkipTenantGuard(ctx)).
@@ -95,6 +109,23 @@ func (r *Repository) ListEmployeeRoles(ctx context.Context, employeeID string) (
 		Joins("JOIN employees ON employees.id = employee_app_roles.employee_id").
 		Joins("LEFT JOIN employee_groups ON employee_groups.id = employee_app_roles.source_group_id").
 		Where("employee_app_roles.employee_id = ?", employeeID).
+		Order("employee_app_roles.granted_at DESC").
+		Scan(&rows).Error
+	return rows, err
+}
+
+func (r *Repository) ListEmployeeRolesByEmployeeIDs(ctx context.Context, employeeIDs []string) ([]employeeRoleRow, error) {
+	if len(employeeIDs) == 0 {
+		return []employeeRoleRow{}, nil
+	}
+	var rows []employeeRoleRow
+	err := r.db.WithContext(tenant.SkipTenantGuard(ctx)).
+		Table("employee_app_roles").
+		Select("employee_app_roles.*, org_nodes.name AS org_node_name, employee_groups.name AS source_group_name, employees.name AS employee_name").
+		Joins("JOIN org_nodes ON org_nodes.id = employee_app_roles.org_node_id").
+		Joins("JOIN employees ON employees.id = employee_app_roles.employee_id").
+		Joins("LEFT JOIN employee_groups ON employee_groups.id = employee_app_roles.source_group_id").
+		Where("employee_app_roles.employee_id IN ?", employeeIDs).
 		Order("employee_app_roles.granted_at DESC").
 		Scan(&rows).Error
 	return rows, err

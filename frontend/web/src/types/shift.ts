@@ -18,22 +18,29 @@ export interface Shift {
   type: ShiftTypeExtended
   scheduling_priority?: number
   is_active: boolean
+  status?: 'active' | 'disabled'
   is_cross_day: boolean
   description?: string
   metadata?: Record<string, unknown>
   weekly_staff_summary?: string
+  fixed_staff_summary?: string
+  group_summary?: string
+  group_names?: string[]
+  fixed_assignment_count?: number
+  group_count?: number
   created_at: string
   updated_at: string
 }
 
 export interface CreateShiftRequest {
   name: string
-  code?: string
+  code: string
   color: string
   start_time: string
   end_time: string
   type?: ShiftType
   scheduling_priority?: number
+  is_active?: boolean
   description?: string
   metadata?: Record<string, unknown>
 }
@@ -46,6 +53,7 @@ export interface UpdateShiftRequest {
   end_time?: string
   type?: ShiftType
   scheduling_priority?: number
+  is_active?: boolean
   description?: string
   metadata?: Record<string, unknown>
 }
@@ -60,7 +68,7 @@ export interface ShiftDependency {
 // ==================== 班次分组关联 ====================
 
 export interface ShiftGroup {
-  id: number
+  id: string
   shift_id: string
   group_id: string
   priority: number
@@ -80,6 +88,7 @@ export type WeekPattern = 'every' | 'odd' | 'even'
 export interface FixedAssignment {
   id?: string
   staff_id: string
+  shift_id?: string
   staff_name?: string
   pattern_type: PatternType
   weekdays?: number[]
@@ -124,6 +133,7 @@ export const SHIFT_COLOR_PRESETS = [
 export const SHIFT_TYPE_OPTIONS = [
   { label: '常规班次', value: 'regular' },
   { label: '加班班次', value: 'overtime' },
+  { label: '值班班次', value: 'oncall' },
   { label: '备班班次', value: 'standby' },
 ] as const
 
@@ -187,6 +197,14 @@ export function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
   return `${h}小时${m > 0 ? `${m}分钟` : ''}`
+}
+
+export function getShiftStatusText(isActive?: boolean): string {
+  return isActive ? '启用' : '禁用'
+}
+
+export function getShiftStatusTagType(isActive?: boolean): string {
+  return isActive ? 'success' : 'info'
 }
 
 // ==================== 星期常量 ====================

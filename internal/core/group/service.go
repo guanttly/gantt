@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"gantt-saas/internal/tenant"
 
@@ -177,12 +178,12 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 }
 
 // List 查询分组列表。
-func (s *Service) List(ctx context.Context) ([]EmployeeGroup, error) {
+func (s *Service) List(ctx context.Context, keyword string) ([]EmployeeGroup, error) {
 	if err := s.ensureDepartmentNode(ctx); err != nil {
 		return nil, err
 	}
 
-	return s.repo.List(ctx)
+	return s.repo.List(ctx, ListOptions{Keyword: strings.TrimSpace(keyword)})
 }
 
 // GetMembers 获取分组成员列表。

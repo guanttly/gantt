@@ -39,6 +39,47 @@ import (
 	"gorm.io/gorm"
 )
 
+type employeeAppRoleReaderAdapter struct {
+	svc *approle.Service
+}
+
+func (a employeeAppRoleReaderAdapter) ListEmployeeRolesBatch(ctx context.Context, employeeIDs []string) (map[string][]employee.EmployeeAppRoleInfo, error) {
+	items, err := a.svc.ListEmployeeRolesBatch(ctx, employeeIDs)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string][]employee.EmployeeAppRoleInfo, len(items))
+	for employeeID, roles := range items {
+		mapped := make([]employee.EmployeeAppRoleInfo, 0, len(roles))
+		for _, role := range roles {
+			var grantedAt string
+			if !role.GrantedAt.IsZero() {
+				grantedAt = role.GrantedAt.Format(time.RFC3339)
+			}
+			var expiresAt *string
+			if role.ExpiresAt != nil {
+				formatted := role.ExpiresAt.Format(time.RFC3339)
+				expiresAt = &formatted
+			}
+			mapped = append(mapped, employee.EmployeeAppRoleInfo{
+				ID:              role.ID,
+				EmployeeID:      role.EmployeeID,
+				OrgNodeID:       role.OrgNodeID,
+				OrgNodeName:     role.OrgNodeName,
+				AppRole:         role.AppRole,
+				Source:          role.Source,
+				SourceGroupID:   role.SourceGroupID,
+				SourceGroupName: role.SourceGroupName,
+				GrantedBy:       role.GrantedBy,
+				GrantedAt:       grantedAt,
+				ExpiresAt:       expiresAt,
+			})
+		}
+		result[employeeID] = mapped
+	}
+	return result, nil
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -162,6 +203,7 @@ func initDependencies(
 	employeeRepo := employee.NewRepository(db)
 	employeeSvc := employee.NewService(employeeRepo)
 	employeeSvc.SetAppRoleCleaner(appRoleSvc)
+	employeeSvc.SetAppRoleReader(employeeAppRoleReaderAdapter{svc: appRoleSvc})
 	employeeSvc.SetOrgNodeResolver(tenantSvc)
 	employeeHandler := employee.NewHandler(employeeSvc)
 
@@ -411,6 +453,11 @@ func registerRoutes(srv *appserver.Server, deps *appDependencies) {
 			r.Use(audit.Middleware(deps.auditLogger))
 
 			auth.RegisterAppProtectedRoutes(r, deps.appAuthHandler)
+			approle.RegisterAppManagementRoutes(r, deps.appRoleHandler, deps.appRoleService)
+			group.RegisterAppRoutes(r, deps.groupHandler, deps.appRoleService)
+			shift.RegisterAppRoutes(r, deps.shiftHandler, deps.appRoleService)
+			leave.RegisterAppRoutes(r, deps.leaveHandler, deps.appRoleService)
+			rule.RegisterAppRoutes(r, deps.ruleHandler, deps.appRoleService)
 			schedule.RegisterAppRoutes(r, deps.scheduleHandler, deps.appRoleService)
 			approle.RegisterAppRoutes(r, deps.appRoleHandler)
 			employee.RegisterAppRefRoutes(r, deps.employeeHandler)

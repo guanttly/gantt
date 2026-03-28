@@ -17,6 +17,7 @@ export interface PlatformEmployee {
   org_node_name?: string
   org_node_path_display?: string
   org_node_type?: string
+  app_roles?: PlatformEmployeeAppRole[]
   created_at: string
   updated_at: string
 }
@@ -92,6 +93,8 @@ export interface PlatformEmployeeAppRole {
   expires_at?: string
 }
 
+export type PlatformEmployeeRoleMap = Record<string, PlatformEmployeeAppRole[]>
+
 export interface PlatformExpiringRole extends PlatformEmployeeAppRole {
   employee_name: string
 }
@@ -165,6 +168,12 @@ export function listExpiringAppRoles(withinDays = 7) {
 
 export function listEmployeeAppRoles(employeeId: string) {
   return client.get<PlatformEmployeeAppRole[]>(`/platform/employees/${employeeId}/app-roles`).then(r => r.data)
+}
+
+export function listEmployeeAppRolesBatch(employeeIds: string[]) {
+  return client.get<PlatformEmployeeRoleMap>('/platform/employees/app-roles', {
+    params: { employee_ids: employeeIds.join(',') },
+  }).then(r => r.data)
 }
 
 export function assignEmployeeAppRole(employeeId: string, data: AssignEmployeeAppRolePayload) {

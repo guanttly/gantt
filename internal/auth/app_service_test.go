@@ -33,7 +33,7 @@ func setupAppAuthService(t *testing.T) (*AppService, *gorm.DB) {
 	return NewAppService(repo, jwtMgr), db
 }
 
-func seedAppEmployee(t *testing.T, db *gorm.DB, nodeID, loginID, password string, mustReset bool) string {
+func seedNamedAppEmployee(t *testing.T, db *gorm.DB, nodeID, name, loginID, password string, mustReset bool) string {
 	t.Helper()
 	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -50,10 +50,10 @@ func seedAppEmployee(t *testing.T, db *gorm.DB, nodeID, loginID, password string
 	}).Error; err != nil {
 		t.Fatalf("创建节点失败: %v", err)
 	}
-	empID := "emp-001"
+	empID := "emp-" + nodeID
 	if err := db.Create(&employee.Employee{
 		ID:              empID,
-		Name:            "张三",
+		Name:            name,
 		EmployeeNo:      stringPtr(loginID),
 		Status:          employee.StatusActive,
 		SchedulingRole:  employee.SchedulingRoleEmployee,
@@ -68,14 +68,18 @@ func seedAppEmployee(t *testing.T, db *gorm.DB, nodeID, loginID, password string
 	return empID
 }
 
+func seedAppEmployee(t *testing.T, db *gorm.DB, nodeID, loginID, password string, mustReset bool) string {
+	t.Helper()
+	return seedNamedAppEmployee(t, db, nodeID, "张三", loginID, password, mustReset)
+}
+
 func TestAppService_Login_Success(t *testing.T) {
 	svc, db := setupAppAuthService(t)
 	empID := seedAppEmployee(t, db, "dept-001", "E1001", "Abc12345", true)
 
 	result, err := svc.Login(context.Background(), AppLoginInput{
-		LoginID:   "E1001",
-		Password:  "Abc12345",
-		OrgNodeID: "dept-001",
+		LoginID:  "E1001",
+		Password: "Abc12345",
 	})
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
@@ -91,6 +95,22 @@ func TestAppService_Login_Success(t *testing.T) {
 	}
 }
 
+func TestAppService_Login_ByEmployeeName(t *testing.T) {
+	svc, db := setupAppAuthService(t)
+	empID := seedNamedAppEmployee(t, db, "dept-001", "张小青", "E1001", "Abc12345", false)
+
+	result, err := svc.Login(context.Background(), AppLoginInput{
+		LoginID:  "张小青",
+		Password: "Abc12345",
+	})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	if result.Employee.ID != empID {
+		t.Fatalf("employee.id = %s, want %s", result.Employee.ID, empID)
+	}
+}
+
 func TestAppService_ForceResetPassword_Success(t *testing.T) {
 	svc, db := setupAppAuthService(t)
 	empID := seedAppEmployee(t, db, "dept-001", "E1001", "Abc12345", true)
@@ -100,9 +120,8 @@ func TestAppService_ForceResetPassword_Success(t *testing.T) {
 	}
 
 	result, err := svc.Login(context.Background(), AppLoginInput{
-		LoginID:   "E1001",
-		Password:  "NewPwd123",
-		OrgNodeID: "dept-001",
+		LoginID:  "E1001",
+		Password: "NewPwd123",
 	})
 	if err != nil {
 		t.Fatalf("重新登录失败: %v", err)
@@ -125,6 +144,20 @@ func TestAppService_GetMe(t *testing.T) {
 	}
 	if me.CurrentNode.NodeID != "dept-001" {
 		t.Fatalf("current_node.node_id = %s, want dept-001", me.CurrentNode.NodeID)
+	}
+}
+
+func TestAppService_Login_AmbiguousLoginID(t *testing.T) {
+	svc, db := setupAppAuthService(t)
+	seedAppEmployee(t, db, "dept-001", "E1001", "Abc12345", false)
+	seedAppEmployee(t, db, "dept-002", "E1001", "Abc12345", false)
+
+	_, err := svc.Login(context.Background(), AppLoginInput{
+		LoginID:  "E1001",
+		Password: "Abc12345",
+	})
+	if err != ErrAppLoginIDAmbiguous {
+		t.Fatalf("Login() error = %v, want %v", err, ErrAppLoginIDAmbiguous)
 	}
 }
 

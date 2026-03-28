@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
 	"gantt-saas/internal/tenant"
 
 	"github.com/google/uuid"
@@ -55,6 +54,7 @@ type ResetPasswordResult struct {
 type Service struct {
 	repo            *Repository
 	appRoleCleaner  AppRoleCleaner
+	appRoleReader   AppRoleReader
 	orgNodeResolver OrgNodeResolver
 	groupCleaner    GroupCleaner
 }
@@ -63,9 +63,14 @@ type AppRoleCleaner interface {
 	CleanupEmployeeRoles(ctx context.Context, employeeID string) error
 }
 
+type AppRoleReader interface {
+	ListEmployeeRolesBatch(ctx context.Context, employeeIDs []string) (map[string][]EmployeeAppRoleInfo, error)
+}
+
 // OrgNodeResolver 查询组织节点信息的接口。
 type OrgNodeResolver interface {
 	GetByID(ctx context.Context, id string) (*tenant.OrgNode, error)
+	GetByIDs(ctx context.Context, ids []string) ([]tenant.OrgNode, error)
 	GetAncestorNames(ctx context.Context, nodePath string) ([]string, error)
 }
 
@@ -81,6 +86,10 @@ func NewService(repo *Repository) *Service {
 
 func (s *Service) SetAppRoleCleaner(cleaner AppRoleCleaner) {
 	s.appRoleCleaner = cleaner
+}
+
+func (s *Service) SetAppRoleReader(reader AppRoleReader) {
+	s.appRoleReader = reader
 }
 
 func (s *Service) SetOrgNodeResolver(resolver OrgNodeResolver) {
@@ -364,16 +373,107 @@ func (s *Service) EnrichResponse(ctx context.Context, emp *Employee) *EmployeeRe
 		resp.OrgNodePathDisplay = node.Name
 	}
 
+	if s.appRoleReader != nil {
+		if roleMap, err := s.appRoleReader.ListEmployeeRolesBatch(ctx, []string{emp.ID}); err == nil {
+			resp.AppRoles = roleMap[emp.ID]
+		}
+	}
+
 	return resp
 }
 
 // EnrichResponseList 批量转换员工列表为带组织路径信息的响应。
 func (s *Service) EnrichResponseList(ctx context.Context, employees []Employee) []EmployeeResponse {
+	return s.enrichResponseList(ctx, employees, false)
+}
+
+func (s *Service) EnrichResponseListWithRoles(ctx context.Context, employees []Employee) []EmployeeResponse {
+	return s.enrichResponseList(ctx, employees, true)
+}
+
+func (s *Service) enrichResponseList(ctx context.Context, employees []Employee, includeRoles bool) []EmployeeResponse {
 	results := make([]EmployeeResponse, len(employees))
 	for i := range employees {
-		results[i] = *s.EnrichResponse(ctx, &employees[i])
+		results[i] = EmployeeResponse{Employee: employees[i]}
 	}
+	if s.orgNodeResolver == nil || len(employees) == 0 {
+		return results
+	}
+
+	nodeIDSet := make(map[string]struct{}, len(employees))
+	for _, emp := range employees {
+		if emp.OrgNodeID != "" {
+			nodeIDSet[emp.OrgNodeID] = struct{}{}
+		}
+	}
+	nodeIDs := make([]string, 0, len(nodeIDSet))
+	for id := range nodeIDSet {
+		nodeIDs = append(nodeIDs, id)
+	}
+	nodes, err := s.orgNodeResolver.GetByIDs(ctx, nodeIDs)
+	if err != nil {
+		return results
+	}
+	nodeMap := make(map[string]tenant.OrgNode, len(nodes))
+	pathIDSet := make(map[string]struct{}, len(nodes)*2)
+	for _, node := range nodes {
+		nodeMap[node.ID] = node
+		for _, part := range strings.Split(strings.Trim(node.Path, "/"), "/") {
+			if part != "" {
+				pathIDSet[part] = struct{}{}
+			}
+		}
+	}
+	pathIDs := make([]string, 0, len(pathIDSet))
+	for id := range pathIDSet {
+		pathIDs = append(pathIDs, id)
+	}
+	pathNodes, err := s.orgNodeResolver.GetByIDs(ctx, pathIDs)
+	if err != nil {
+		return results
+	}
+	nameMap := make(map[string]string, len(pathNodes))
+	for _, node := range pathNodes {
+		nameMap[node.ID] = node.Name
+	}
+
+	for i := range results {
+		node, ok := nodeMap[results[i].OrgNodeID]
+		if !ok {
+			continue
+		}
+		results[i].OrgNodeName = node.Name
+		results[i].OrgNodeType = node.NodeType
+		results[i].OrgNodePathDisplay = buildPathDisplay(node.Path, nameMap, node.Name)
+	}
+
+	if includeRoles && s.appRoleReader != nil {
+		employeeIDs := make([]string, 0, len(results))
+		for _, item := range results {
+			employeeIDs = append(employeeIDs, item.ID)
+		}
+		if roleMap, err := s.appRoleReader.ListEmployeeRolesBatch(ctx, employeeIDs); err == nil {
+			for i := range results {
+				results[i].AppRoles = roleMap[results[i].ID]
+			}
+		}
+	}
+
 	return results
+}
+
+func buildPathDisplay(nodePath string, nameMap map[string]string, fallback string) string {
+	parts := strings.Split(strings.Trim(nodePath, "/"), "/")
+	names := make([]string, 0, len(parts))
+	for _, id := range parts {
+		if name, ok := nameMap[id]; ok {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return fallback
+	}
+	return strings.Join(names, " / ")
 }
 
 // TransferInput 员工调动的输入参数。

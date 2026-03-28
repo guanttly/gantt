@@ -5,7 +5,11 @@ import client from './client'
 
 /** 员工列表 */
 export function listEmployees(params?: ListParams & { include_groups?: boolean }) {
-  return client.get<PaginatedResponse<Employee>>('/employees/', { params }).then(r => r.data)
+  const query = {
+    ...params,
+    size: params?.page_size,
+  }
+  return client.get<PaginatedResponse<Employee>>('/app/scheduling/ref/employees', { params: query }).then(r => r.data)
 }
 
 /** 创建员工 */

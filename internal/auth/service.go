@@ -32,6 +32,7 @@ var (
 	ErrNodeRoleNotFound    = errors.New("用户节点角色关联不存在")
 	ErrOldPasswordMismatch = errors.New("旧密码不正确")
 	ErrNotRequireReset     = errors.New("当前用户无需强制重置密码")
+	ErrAppLoginIDAmbiguous = errors.New("该登录标识匹配多个员工，请改用更唯一的工号、手机号或邮箱登录")
 )
 
 const (

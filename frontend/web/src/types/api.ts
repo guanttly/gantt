@@ -24,6 +24,8 @@ export interface PaginatedResponse<T> {
   total_pages: number
 }
 
+export type ListResponse<T> = PaginatedResponse<T> | T[]
+
 /** 列表查询参数（分页+搜索） */
 export interface ListParams extends PaginationParams {
   keyword?: string

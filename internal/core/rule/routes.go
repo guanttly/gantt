@@ -16,6 +16,11 @@ func RegisterPlatformRoutes(r chi.Router, h *Handler, appRoleSvc *approle.Servic
 	registerAt(r, "/platform/rules", h, appRoleSvc)
 }
 
+// RegisterAppRoutes 注册排班应用规则管理路由到 /api/v1/app/rules。
+func RegisterAppRoutes(r chi.Router, h *Handler, appRoleSvc *approle.Service) {
+	registerAt(r, "/app/rules", h, appRoleSvc)
+}
+
 // RegisterAppRefRoutes 注册排班应用只读规则引用路由到 /api/v1/app/scheduling/ref/rules。
 func RegisterAppRefRoutes(r chi.Router, h *Handler) {
 	r.Route("/app/scheduling/ref/rules", func(r chi.Router) {

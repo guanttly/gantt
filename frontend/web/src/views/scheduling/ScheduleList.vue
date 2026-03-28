@@ -45,19 +45,19 @@ async function handleDelete(row: SchedulePlan) {
       </el-button>
     </div>
 
-    <el-table v-loading="loading" :data="items" border stripe style="width: 100%">
-      <el-table-column prop="name" label="名称" width="200" />
-      <el-table-column prop="start_date" label="开始日期" width="120" />
-      <el-table-column prop="end_date" label="结束日期" width="120" />
-      <el-table-column prop="status" label="状态" width="120">
+    <el-table v-loading="loading" :data="items" border stripe class="schedule-table">
+      <el-table-column prop="name" label="名称" min-width="240" show-overflow-tooltip />
+      <el-table-column prop="start_date" label="开始日期" min-width="140" />
+      <el-table-column prop="end_date" label="结束日期" min-width="140" />
+      <el-table-column prop="status" label="状态" min-width="140">
         <template #default="{ row }">
           <el-tag :type="(statusMap[row.status]?.type as any)" size="small">
             {{ statusMap[row.status]?.label || row.status }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="created_at" label="创建时间" width="180" />
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column prop="created_at" label="创建时间" min-width="200" />
+      <el-table-column label="操作" min-width="160" align="right">
         <template #default="{ row }">
           <el-button :icon="View" link type="primary" @click="router.push(`/scheduling/${row.id}`)">
             查看
@@ -103,5 +103,13 @@ async function handleDelete(row: SchedulePlan) {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+.schedule-table {
+  width: 100%;
+}
+
+.schedule-table :deep(.el-table__empty-block) {
+  width: 100% !important;
 }
 </style>

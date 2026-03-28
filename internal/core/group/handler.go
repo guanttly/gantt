@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"gantt-saas/internal/auth"
 	"gantt-saas/internal/common/response"
@@ -24,7 +25,7 @@ func NewHandler(svc *Service) *Handler {
 // List 查询分组列表。
 // GET /api/v1/groups
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	groups, err := h.svc.List(r.Context())
+	groups, err := h.svc.List(r.Context(), strings.TrimSpace(r.URL.Query().Get("keyword")))
 	if err != nil {
 		response.InternalError(w, "查询分组列表失败")
 		return

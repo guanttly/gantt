@@ -58,7 +58,7 @@ async function handleSubmit() {
 async function loadGroups() {
   try {
     const result = await listGroups()
-    groups.value = result.items
+    groups.value = Array.isArray(result) ? result : result.items
   }
   catch {
     // 分组加载失败不阻断页面

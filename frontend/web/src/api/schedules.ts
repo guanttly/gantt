@@ -28,57 +28,57 @@ export type {
 
 /** 创建排班计划 */
 export function createSchedule(data: CreateScheduleRequest) {
-  return client.post<SchedulePlan>('/schedules/', data).then(r => r.data)
+  return client.post<SchedulePlan>('/app/scheduling/plans/', data).then(r => r.data)
 }
 
 /** 排班列表 */
 export function listSchedules(params?: ListParams) {
-  return client.get<PaginatedResponse<SchedulePlan>>('/schedules/', { params }).then(r => r.data)
+  return client.get<PaginatedResponse<SchedulePlan>>('/app/scheduling/plans/', { params }).then(r => r.data)
 }
 
 /** 获取排班详情 */
 export function getSchedule(id: string) {
-  return client.get<SchedulePlan>(`/schedules/${id}`).then(r => r.data)
+  return client.get<SchedulePlan>(`/app/scheduling/plans/${id}`).then(r => r.data)
 }
 
 /** 删除排班 */
 export function deleteSchedule(id: string) {
-  return client.delete(`/schedules/${id}`)
+  return client.delete(`/app/scheduling/plans/${id}`)
 }
 
 /** 生成排班（调用引擎） */
 export function generateSchedule(id: string) {
-  return client.post(`/schedules/${id}/generate`).then(r => r.data)
+  return client.put(`/app/scheduling/plans/${id}/execute`).then(r => r.data)
 }
 
 /** 获取排班分配 */
 export function getAssignments(id: string) {
-  return client.get<ScheduleAssignment[]>(`/schedules/${id}/assignments`).then(r => r.data)
+  return client.get<ScheduleAssignment[]>(`/app/scheduling/plans/${id}/assignments`).then(r => r.data)
 }
 
 /** 调整排班分配 */
 export function adjustAssignments(id: string, data: AdjustAssignmentRequest) {
-  return client.put(`/schedules/${id}/assignments`, data).then(r => r.data)
+  return client.put(`/app/scheduling/plans/${id}/adjust`, data).then(r => r.data)
 }
 
 /** 验证排班 */
 export function validateSchedule(id: string) {
-  return client.post<ValidationResult>(`/schedules/${id}/validate`).then(r => r.data)
+  return client.post<ValidationResult>(`/app/scheduling/plans/${id}/validate`).then(r => r.data)
 }
 
 /** 发布排班 */
 export function publishSchedule(id: string) {
-  return client.post(`/schedules/${id}/publish`).then(r => r.data)
+  return client.put(`/app/scheduling/plans/${id}/publish`).then(r => r.data)
 }
 
 /** 获取排班变更记录 */
 export function getScheduleChanges(id: string) {
-  return client.get<ScheduleChange[]>(`/schedules/${id}/changes`).then(r => r.data)
+  return client.get<ScheduleChange[]>(`/app/scheduling/plans/${id}/changes`).then(r => r.data)
 }
 
 /** 获取排班统计 */
 export function getScheduleSummary(id: string) {
-  return client.get<ScheduleSummary>(`/schedules/${id}/summary`).then(r => r.data)
+  return client.get<ScheduleSummary>(`/app/scheduling/plans/${id}/summary`).then(r => r.data)
 }
 
 // ==================== 旧排班分配 API（甘特图直接操作） ====================
@@ -107,7 +107,7 @@ export function getEmployeeSchedule(params: { employee_id: string, start_date: s
 
 /** 查询当前登录员工的已发布排班 */
 export function getMySchedule(params: { start_date: string, end_date: string }) {
-  return client.get<MyScheduleAssignment[]>('/scheduling/assignments/self', { params }).then(r => r.data)
+  return client.get<MyScheduleAssignment[]>('/app/scheduling/assignments/self', { params }).then(r => r.data)
 }
 
 /** 删除排班分配 */

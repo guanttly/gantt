@@ -22,14 +22,13 @@ func NewAppService(repo *Repository, jwt *JWTManager) *AppService {
 }
 
 func (s *AppService) Login(ctx context.Context, input AppLoginInput) (*AppLoginResponse, error) {
-	if strings.TrimSpace(input.OrgNodeID) == "" {
-		return nil, ErrNoNodePermission
-	}
-
-	emp, err := s.repo.FindEmployeeByLoginID(ctx, input.OrgNodeID, strings.TrimSpace(input.LoginID))
+	emp, err := s.repo.FindEmployeeByLoginID(ctx, strings.TrimSpace(input.LoginID))
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrInvalidCredentials
+		}
+		if errors.Is(err, ErrAppLoginIDAmbiguous) {
+			return nil, err
 		}
 		return nil, fmt.Errorf("查询员工失败: %w", err)
 	}

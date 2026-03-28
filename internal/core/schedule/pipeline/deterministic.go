@@ -37,7 +37,7 @@ func NewDeterministicPipeline(deps *DeterministicDeps) *Pipeline {
 			LeaveRepo:           deps.LeaveRepo,
 			GroupMemberProvider: deps.GroupMemberProvider,
 		},
-		&step.PhaseZeroStep{},
+		&step.PhaseZeroStep{FixedAssignmentProvider: deps.ShiftService},
 		&step.PhaseOneStep{},
 		&step.PhaseTwoStep{},
 		&step.CrossGroupConflictStep{

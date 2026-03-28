@@ -116,7 +116,7 @@ function getRoleTagType(roleName: string) {
   return roleTagTypeMap[roleName as AppRoleName] || 'info'
 }
 
-watch(items, rows => loadVisibleRoles(rows), { immediate: true })
+watch(() => items.value, rows => void loadVisibleRoles(rows), { immediate: true })
 </script>
 
 <template>

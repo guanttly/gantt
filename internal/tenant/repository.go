@@ -35,6 +35,16 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*OrgNode, error) {
 	return &node, nil
 }
 
+// GetByIDs 根据 ID 列表批量查询节点。
+func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]OrgNode, error) {
+	if len(ids) == 0 {
+		return []OrgNode{}, nil
+	}
+	var nodes []OrgNode
+	err := r.db.WithContext(SkipTenantGuard(ctx)).Where("id IN ?", ids).Find(&nodes).Error
+	return nodes, err
+}
+
 // GetByParentAndCode 根据父节点 ID 和 code 查询节点（用于唯一性检查）。
 func (r *Repository) GetByParentAndCode(ctx context.Context, parentID *string, code string) (*OrgNode, error) {
 	var node OrgNode

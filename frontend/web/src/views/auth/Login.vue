@@ -16,13 +16,17 @@ const form = reactive({
 })
 
 const rules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  username: [{ required: true, message: '请输入工号、手机号、邮箱或姓名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
 const formRef = ref()
 
 async function handleLogin() {
+  if (loading.value) {
+    return
+  }
+
   try {
     await formRef.value?.validate()
   }
@@ -37,10 +41,6 @@ async function handleLogin() {
     // 强制重置密码
     if (res.must_reset_pwd) {
       await router.push('/force-reset-password')
-    }
-    // 如果有多个可用节点且尚未指定当前节点，跳到节点选择
-    else if (res.available_nodes.length > 1 && !res.current_node?.node_id) {
-      await router.push('/select-node')
     }
     else {
       const redirect = (route.query.redirect as string) || '/'
@@ -66,7 +66,7 @@ async function handleLogin() {
           智能排班平台
         </h1>
         <p class="login-subtitle">
-          AI 驱动的智能排班 SaaS 解决方案
+          使用工号、手机号、邮箱或姓名登录，系统会自动进入所属科室
         </p>
       </div>
 
@@ -75,14 +75,15 @@ async function handleLogin() {
         :model="form"
         :rules="rules"
         class="login-form"
-        @keyup.enter="handleLogin"
+        @submit.prevent="handleLogin"
       >
         <el-form-item prop="username">
           <el-input
             v-model="form.username"
-            placeholder="用户名"
+            placeholder="工号 / 手机号 / 邮箱 / 姓名"
             size="large"
             :prefix-icon="User"
+            :disabled="loading"
           />
         </el-form-item>
 
@@ -94,6 +95,7 @@ async function handleLogin() {
             size="large"
             show-password
             :prefix-icon="Lock"
+            :disabled="loading"
           />
         </el-form-item>
 
@@ -103,7 +105,7 @@ async function handleLogin() {
             size="large"
             :loading="loading"
             class="login-btn"
-            @click="handleLogin"
+            native-type="submit"
           >
             登录
           </el-button>

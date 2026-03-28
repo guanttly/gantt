@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"gantt-saas/internal/common/response"
 	"gantt-saas/internal/tenant"
@@ -27,6 +28,8 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	size, _ := strconv.Atoi(r.URL.Query().Get("size"))
+	isPlatformEmployees := strings.Contains(r.URL.Path, "/platform/employees")
+	isAppEmployeeRef := strings.Contains(r.URL.Path, "/app/scheduling/ref/employees")
 
 	opts := ListOptions{
 		Page:     page,
@@ -35,6 +38,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		Status:   r.URL.Query().Get("status"),
 		Position: r.URL.Query().Get("position"),
 		Category: r.URL.Query().Get("category"),
+		PrioritizeAdmins: isPlatformEmployees || isAppEmployeeRef,
 	}
 
 	employees, total, err := h.svc.List(r.Context(), opts)
@@ -44,6 +48,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	enriched := h.svc.EnrichResponseList(r.Context(), employees)
+	if isPlatformEmployees {
+		enriched = h.svc.EnrichResponseListWithRoles(r.Context(), employees)
+	}
 	response.Page(w, enriched, total, opts.Page, opts.Size)
 }
 

@@ -7,13 +7,13 @@ export interface AssignEmployeeAppRoleRequest {
 }
 
 export function listEmployeeAppRoles(employeeId: string) {
-  return client.get<AppRoleGrant[]>(`/employees/${employeeId}/app-roles`).then(r => r.data)
+  return client.get<AppRoleGrant[]>(`/app/employees/${employeeId}/app-roles`).then(r => r.data)
 }
 
 export function assignEmployeeAppRole(employeeId: string, data: AssignEmployeeAppRoleRequest) {
-  return client.post<AppRoleGrant>(`/employees/${employeeId}/app-roles`, data).then(r => r.data)
+  return client.post<AppRoleGrant>(`/app/employees/${employeeId}/app-roles`, data).then(r => r.data)
 }
 
 export function removeEmployeeAppRole(employeeId: string, roleId: string) {
-  return client.delete(`/employees/${employeeId}/app-roles/${roleId}`)
+  return client.delete(`/app/employees/${employeeId}/app-roles/${roleId}`)
 }

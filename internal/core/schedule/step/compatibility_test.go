@@ -9,6 +9,14 @@ import (
 	"gantt-saas/internal/core/rule"
 )
 
+type stubFixedAssignmentProvider struct {
+	calendar map[string]map[string][]string
+}
+
+func (s stubFixedAssignmentProvider) GetFixedAssignmentsForRange(_ context.Context, _ []string, _, _ string) (map[string]map[string][]string, error) {
+	return s.calendar, nil
+}
+
 func mustJSON(t *testing.T, v any) json.RawMessage {
 	t.Helper()
 	b, err := json.Marshal(v)
@@ -67,6 +75,45 @@ func TestPhaseZeroStep_AppliesFixedScheduleRule(t *testing.T) {
 	} {
 		if !seen[key] {
 			t.Errorf("missing fixed assignment %s", key)
+		}
+	}
+}
+
+func TestPhaseZeroStep_AppliesShiftFixedAssignmentsBeforeRules(t *testing.T) {
+	config := &ScheduleConfig{
+		ShiftIDs: []string{"day"},
+		Requirements: map[string]map[string]int{
+			"day": {
+				"2026-03-23": 2,
+				"2026-03-24": 1,
+			},
+		},
+	}
+	state := NewScheduleState("sch-1", "org-1", "", "2026-03-23", "2026-03-24", "user-1", config)
+	state.ShiftOrder = makeShifts("day")
+
+	s := &PhaseZeroStep{FixedAssignmentProvider: stubFixedAssignmentProvider{calendar: map[string]map[string][]string{
+		"day": {
+			"2026-03-23": {"e1", "e2", "e3"},
+			"2026-03-24": {"e1"},
+		},
+	}}}
+	if err := s.Execute(context.Background(), state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := len(state.Assignments); got != 3 {
+		t.Fatalf("expected 3 assignments capped by requirement, got %d", got)
+	}
+	if state.CountAssigned("day", "2026-03-23") != 2 {
+		t.Fatalf("expected 2 assignments on 2026-03-23, got %d", state.CountAssigned("day", "2026-03-23"))
+	}
+	if state.CountAssigned("day", "2026-03-24") != 1 {
+		t.Fatalf("expected 1 assignment on 2026-03-24, got %d", state.CountAssigned("day", "2026-03-24"))
+	}
+	for _, assignment := range state.Assignments {
+		if assignment.Source != SourceFixed {
+			t.Fatalf("expected source %q, got %q", SourceFixed, assignment.Source)
 		}
 	}
 }

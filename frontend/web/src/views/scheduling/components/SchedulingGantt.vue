@@ -85,7 +85,7 @@ async function loadBaseDataInternal() {
     listShifts({ page: 1, size: 100 }),
   ])
   employees.value = empRes.items || []
-  shifts.value = shiftRes.items || []
+  shifts.value = Array.isArray(shiftRes) ? shiftRes : (shiftRes.items || [])
 }
 
 async function loadScheduleDataInternal() {

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { PlatformEmployee, PlatformEmployeeAppRole, PlatformEmployeePayload } from '@/api/platform'
 import { computed, onMounted, ref } from 'vue'
-import { NButton, NForm, NFormItem, NInput, NModal, NSelect, NSpin, NTag, useDialog, useMessage } from 'naive-ui'
+import { NButton, NForm, NFormItem, NInput, NModal, NPagination, NSelect, NSpin, NTag, useDialog, useMessage } from 'naive-ui'
 import { getOrgTree } from '@/api/org'
-import { assignEmployeeAppRole, createPlatformEmployee, deletePlatformEmployee, listEmployeeAppRoles, listPlatformEmployees, removeEmployeeAppRole, resetPlatformEmployeePassword, transferEmployee, updatePlatformEmployee } from '@/api/platform'
+import { assignEmployeeAppRole, createPlatformEmployee, deletePlatformEmployee, listPlatformEmployees, removeEmployeeAppRole, resetPlatformEmployeePassword, transferEmployee, updatePlatformEmployee } from '@/api/platform'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -14,6 +14,9 @@ const employees = ref<PlatformEmployee[]>([])
 const employeeRoleMap = ref<Record<string, PlatformEmployeeAppRole[]>>({})
 const orgTree = ref<any[]>([])
 const keyword = ref('')
+const currentPage = ref(1)
+const pageSize = ref(5)
+const total = ref(0)
 const dialogVisible = ref(false)
 const editingEmployee = ref<PlatformEmployee | null>(null)
 const message = useMessage()
@@ -35,20 +38,6 @@ const form = ref<PlatformEmployeePayload>({
   category: '',
   hire_date: '',
   status: 'active',
-})
-
-const filteredEmployees = computed(() => {
-  const text = keyword.value.trim().toLowerCase()
-  if (!text) {
-    return employees.value
-  }
-  return employees.value.filter(item =>
-    item.name.toLowerCase().includes(text)
-    || item.employee_no?.toLowerCase().includes(text)
-    || item.phone?.toLowerCase().includes(text)
-    || item.email?.toLowerCase().includes(text)
-    || item.position?.toLowerCase().includes(text),
-  )
 })
 
 const statusOptions = [
@@ -112,21 +101,45 @@ function resetForm() {
 async function loadEmployees() {
   loading.value = true
   try {
-    const [result, tree] = await Promise.all([
-      listPlatformEmployees({ page: 1, size: 200 }),
-      getOrgTree(),
-    ])
+    const result = await listPlatformEmployees({
+      page: currentPage.value,
+      size: pageSize.value,
+      keyword: keyword.value.trim() || undefined,
+    })
     employees.value = result.data
-    orgTree.value = tree
-    const roleEntries = await Promise.all(result.data.map(async employee => {
-      const roles = await listEmployeeAppRoles(employee.id)
-      return [employee.id, roles] as const
-    }))
-    employeeRoleMap.value = Object.fromEntries(roleEntries)
+    total.value = result.total
+    pageSize.value = result.size
+    employeeRoleMap.value = Object.fromEntries(result.data.map(employee => [employee.id, employee.app_roles || []]))
   }
   finally {
     loading.value = false
   }
+}
+
+async function loadOrgTree() {
+  if (orgTree.value.length > 0) {
+    return
+  }
+  orgTree.value = await getOrgTree()
+}
+onMounted(async () => {
+  await Promise.all([loadOrgTree(), loadEmployees()])
+})
+
+function handleSearch() {
+  currentPage.value = 1
+  loadEmployees()
+}
+
+function handlePageChange(page: number) {
+  currentPage.value = page
+  loadEmployees()
+}
+
+function handlePageSizeChange(size: number) {
+  pageSize.value = size
+  currentPage.value = 1
+  loadEmployees()
 }
 
 function employeeRoles(employeeId: string) {
@@ -332,7 +345,14 @@ onMounted(loadEmployees)
 
       <section class="page-toolbar">
         <div class="toolbar-left">
-          <n-input v-model:value="keyword" clearable placeholder="搜索姓名、工号、手机号、邮箱" style="width: 320px" />
+          <n-input
+            v-model:value="keyword"
+            clearable
+            placeholder="搜索姓名、工号、手机号"
+            style="width: 320px"
+            @keyup.enter="handleSearch"
+            @clear="handleSearch"
+          />
         </div>
         <div class="toolbar-right">
           <n-button type="primary" @click="openCreate">新增员工</n-button>
@@ -342,70 +362,84 @@ onMounted(loadEmployees)
       <section class="page-card">
         <div class="page-card-inner">
           <n-spin :show="loading">
-            <table class="admin-table">
-              <thead>
-                <tr>
-                  <th>所属组织</th>
-                  <th>姓名</th>
-                  <th>工号</th>
-                  <th>职位</th>
-                  <th>应用角色</th>
-                  <th>联系方式</th>
-                  <th>状态</th>
-                  <th>需改密</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="item in filteredEmployees" :key="item.id">
-                  <td>
-                    <div>{{ item.org_node_path_display || orgNodeName(item.org_node_id) }}</div>
-                    <div v-if="item.org_node_type" class="table-muted">{{ item.org_node_type }}</div>
-                  </td>
-                  <td>{{ item.name }}</td>
-                  <td>{{ item.employee_no || '-' }}</td>
-                  <td>{{ item.position || '-' }}</td>
-                  <td>
-                    <div class="table-role-list">
-                      <n-tag v-for="role in employeeRoles(item.id)" :key="role.id" size="small" :type="role.app_role === 'app:schedule_admin' ? 'success' : 'default'">
-                        {{ appRoleLabel(role) }}
+            <div class="table-shell">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>所属组织</th>
+                    <th>姓名</th>
+                    <th>工号</th>
+                    <th>职位</th>
+                    <th>应用角色</th>
+                    <th>联系方式</th>
+                    <th>状态</th>
+                    <th>需改密</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in employees" :key="item.id">
+                    <td>
+                      <div>{{ item.org_node_path_display || orgNodeName(item.org_node_id) }}</div>
+                      <div v-if="item.org_node_type" class="table-muted">{{ item.org_node_type }}</div>
+                    </td>
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.employee_no || '-' }}</td>
+                    <td>{{ item.position || '-' }}</td>
+                    <td>
+                      <div class="table-role-list">
+                        <n-tag v-for="role in employeeRoles(item.id)" :key="role.id" size="small" :type="role.app_role === 'app:schedule_admin' ? 'success' : 'default'">
+                          {{ appRoleLabel(role) }}
+                        </n-tag>
+                        <span v-if="!employeeRoles(item.id).length" class="table-muted">-</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div>{{ item.phone || '-' }}</div>
+                      <div class="table-muted">{{ item.email || '-' }}</div>
+                    </td>
+                    <td>
+                      <n-tag :type="item.status === 'active' ? 'success' : 'default'" size="small">
+                        {{ item.status === 'active' ? '在职' : '停用' }}
                       </n-tag>
-                      <span v-if="!employeeRoles(item.id).length" class="table-muted">-</span>
-                    </div>
-                  </td>
-                  <td>
-                    <div>{{ item.phone || '-' }}</div>
-                    <div class="table-muted">{{ item.email || '-' }}</div>
-                  </td>
-                  <td>
-                    <n-tag :type="item.status === 'active' ? 'success' : 'default'" size="small">
-                      {{ item.status === 'active' ? '在职' : '停用' }}
-                    </n-tag>
-                  </td>
-                  <td>{{ item.app_must_reset_pwd ? '是' : '否' }}</td>
-                  <td>
-                    <div class="table-actions">
-                      <n-button text type="primary" @click="openEdit(item)">编辑</n-button>
-                      <n-button text type="primary" @click="resetEmployeePassword(item)">重置密码</n-button>
-                      <n-button
-                        text
-                        :type="hasCurrentDepartmentAdminRole(item) ? 'warning' : 'success'"
-                        :loading="roleUpdatingEmployeeId === item.id"
-                        @click="toggleDepartmentAdmin(item)"
-                      >
-                        {{ hasCurrentDepartmentAdminRole(item) ? '撤管理员' : '设管理员' }}
-                      </n-button>
-                      <n-button text type="warning" @click="openTransfer(item)">调动</n-button>
-                      <n-button text type="error" @click="removeEmployee(item)">删除</n-button>
-                    </div>
-                  </td>
-                </tr>
-                <tr v-if="!filteredEmployees.length">
-                  <td colspan="9" class="table-empty">暂无员工数据</td>
-                </tr>
-              </tbody>
-            </table>
+                    </td>
+                    <td>{{ item.app_must_reset_pwd ? '是' : '否' }}</td>
+                    <td>
+                      <div class="table-actions">
+                        <n-button text type="primary" @click="openEdit(item)">编辑</n-button>
+                        <n-button text type="primary" @click="resetEmployeePassword(item)">重置密码</n-button>
+                        <n-button
+                          text
+                          :type="hasCurrentDepartmentAdminRole(item) ? 'warning' : 'success'"
+                          :loading="roleUpdatingEmployeeId === item.id"
+                          @click="toggleDepartmentAdmin(item)"
+                        >
+                          {{ hasCurrentDepartmentAdminRole(item) ? '撤管理员' : '设管理员' }}
+                        </n-button>
+                        <n-button text type="warning" @click="openTransfer(item)">调动</n-button>
+                        <n-button text type="error" @click="removeEmployee(item)">删除</n-button>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-if="!employees.length">
+                    <td colspan="9" class="table-empty">暂无员工数据</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </n-spin>
+
+          <div class="page-pagination">
+            <n-pagination
+              :page="currentPage"
+              :page-size="pageSize"
+              :item-count="total"
+              :page-sizes="[5, 10, 20, 50]"
+              show-size-picker
+              @update:page="handlePageChange"
+              @update:page-size="handlePageSizeChange"
+            />
+          </div>
         </div>
       </section>
 
@@ -474,6 +508,10 @@ onMounted(loadEmployees)
 </template>
 
 <style scoped>
+.table-shell {
+  overflow-x: auto;
+}
+
 .admin-table {
   width: 100%;
   border-collapse: collapse;
@@ -526,6 +564,12 @@ onMounted(loadEmployees)
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.page-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
 }
 
 @media (max-width: 760px) {

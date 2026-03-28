@@ -31,6 +31,7 @@ func setupEmployeeService(t *testing.T) (*Service, *gorm.DB, tenant.OrgNode) {
 	statements := []string{
 		`CREATE TABLE org_nodes (id TEXT PRIMARY KEY, parent_id TEXT, node_type TEXT NOT NULL, name TEXT NOT NULL, code TEXT NOT NULL, contact_name TEXT, contact_phone TEXT, path TEXT NOT NULL, depth INTEGER NOT NULL DEFAULT 0, is_login_point BOOLEAN NOT NULL DEFAULT FALSE, status TEXT NOT NULL DEFAULT 'active', created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE employees (id TEXT PRIMARY KEY, org_node_id TEXT NOT NULL, name TEXT NOT NULL, employee_no TEXT, phone TEXT, email TEXT, position TEXT, category TEXT, scheduling_role TEXT NOT NULL DEFAULT 'employee', app_password_hash TEXT, app_must_reset_pwd BOOLEAN NOT NULL DEFAULT TRUE, status TEXT NOT NULL DEFAULT 'active', hire_date TEXT, created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE employee_app_roles (id TEXT PRIMARY KEY, employee_id TEXT NOT NULL, org_node_id TEXT NOT NULL, app_role TEXT NOT NULL, source TEXT, source_group_id TEXT, granted_by TEXT, granted_at DATETIME, expires_at DATETIME)`,
 	}
 	for _, statement := range statements {
 		if err := db.Exec(statement).Error; err != nil {
@@ -285,5 +286,41 @@ func TestService_Transfer_RejectsSameDepartment(t *testing.T) {
 	_, err := svc.Transfer(ctx, emp.ID, TransferInput{TargetOrgNodeID: node.ID})
 	if !errors.Is(err, ErrEmployeeSameDepartment) {
 		t.Fatalf("error = %v, want ErrEmployeeSameDepartment", err)
+	}
+}
+
+func TestService_List_PrioritizesAdminsThenEmployeeNo(t *testing.T) {
+	svc, db, node := setupEmployeeService(t)
+	ctx := tenant.WithOrgNode(context.Background(), node.ID, node.Path)
+
+	employees := []Employee{
+		{ID: "emp-admin-010", Name: "管理员二", EmployeeNo: &[]string{"010"}[0], Status: StatusActive, TenantModel: tenant.TenantModel{OrgNodeID: node.ID}},
+		{ID: "emp-user-001", Name: "普通员工一", EmployeeNo: &[]string{"001"}[0], Status: StatusActive, TenantModel: tenant.TenantModel{OrgNodeID: node.ID}},
+		{ID: "emp-admin-002", Name: "管理员一", EmployeeNo: &[]string{"002"}[0], Status: StatusActive, TenantModel: tenant.TenantModel{OrgNodeID: node.ID}},
+		{ID: "emp-user-003", Name: "普通员工二", EmployeeNo: &[]string{"003"}[0], Status: StatusActive, TenantModel: tenant.TenantModel{OrgNodeID: node.ID}},
+	}
+	if err := db.Create(&employees).Error; err != nil {
+		t.Fatalf("创建测试员工失败: %v", err)
+	}
+	if err := db.Exec(`INSERT INTO employee_app_roles (id, employee_id, org_node_id, app_role, source, granted_by, granted_at) VALUES
+		('role-1', 'emp-admin-010', ?, 'app:schedule_admin', 'manual', 'tester', CURRENT_TIMESTAMP),
+		('role-2', 'emp-admin-002', ?, 'app:schedule_admin', 'manual', 'tester', CURRENT_TIMESTAMP)
+	`, node.ID, node.ID).Error; err != nil {
+		t.Fatalf("创建测试应用角色失败: %v", err)
+	}
+
+	items, total, err := svc.List(ctx, ListOptions{Page: 1, Size: 10, PrioritizeAdmins: true})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if total != 4 {
+		t.Fatalf("total = %d, want 4", total)
+	}
+	got := []string{items[0].ID, items[1].ID, items[2].ID, items[3].ID}
+	want := []string{"emp-admin-002", "emp-admin-010", "emp-user-001", "emp-user-003"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("order[%d] = %s, want %s; full=%v", i, got[i], want[i], got)
+		}
 	}
 }

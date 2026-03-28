@@ -55,6 +55,7 @@ func setupShiftService(t *testing.T) (*Service, *gorm.DB, tenant.OrgNode) {
 			org_node_id TEXT NOT NULL,
 			name TEXT NOT NULL,
 			code TEXT NOT NULL,
+			type TEXT NOT NULL DEFAULT 'regular',
 			start_time TEXT NOT NULL,
 			end_time TEXT NOT NULL,
 			duration INTEGER NOT NULL,
@@ -62,6 +63,53 @@ func setupShiftService(t *testing.T) (*Service, *gorm.DB, tenant.OrgNode) {
 			color TEXT,
 			priority INTEGER NOT NULL DEFAULT 0,
 			status TEXT NOT NULL DEFAULT 'active',
+			description TEXT,
+			metadata TEXT,
+			created_at DATETIME,
+			updated_at DATETIME
+		)`,
+		`CREATE TABLE shift_groups (
+			id TEXT PRIMARY KEY,
+			org_node_id TEXT NOT NULL,
+			shift_id TEXT NOT NULL,
+			group_id TEXT NOT NULL,
+			priority INTEGER NOT NULL DEFAULT 0,
+			is_active BOOLEAN NOT NULL DEFAULT TRUE,
+			notes TEXT,
+			created_at DATETIME,
+			updated_at DATETIME
+		)`,
+		`CREATE TABLE employee_groups (
+			id TEXT PRIMARY KEY,
+			org_node_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			description TEXT,
+			created_at DATETIME,
+			updated_at DATETIME
+		)`,
+		`CREATE TABLE fixed_assignments (
+			id TEXT PRIMARY KEY,
+			org_node_id TEXT NOT NULL,
+			shift_id TEXT NOT NULL,
+			employee_id TEXT NOT NULL,
+			pattern_type TEXT NOT NULL,
+			weekdays TEXT,
+			week_pattern TEXT,
+			monthdays TEXT,
+			specific_dates TEXT,
+			start_date TEXT,
+			end_date TEXT,
+			is_active BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at DATETIME,
+			updated_at DATETIME
+		)`,
+		`CREATE TABLE shift_weekly_staff (
+			id TEXT PRIMARY KEY,
+			org_node_id TEXT NOT NULL,
+			shift_id TEXT NOT NULL,
+			weekday INTEGER NOT NULL,
+			staff_count INTEGER NOT NULL DEFAULT 0,
+			is_custom BOOLEAN NOT NULL DEFAULT FALSE,
 			created_at DATETIME,
 			updated_at DATETIME
 		)`,
@@ -193,6 +241,100 @@ func TestService_ListAvailable(t *testing.T) {
 	}
 	if available[0].ID != "shift-active" {
 		t.Fatalf("available[0].id = %q, want %q", available[0].ID, "shift-active")
+	}
+}
+
+func TestService_GetShiftGroups_DoesNotRequireGroupCodeColumn(t *testing.T) {
+	svc, db, node := setupShiftService(t)
+	ctx := tenant.WithOrgNode(context.Background(), node.ID, node.Path)
+
+	shift := Shift{
+		ID:        "shift-001",
+		Name:      "白班",
+		Code:      "day",
+		Type:      ShiftTypeRegular,
+		StartTime: "08:00",
+		EndTime:   "16:00",
+		Duration:  8,
+		Color:     "#ffffff",
+		Priority:  1,
+		Status:    StatusActive,
+		TenantModel: tenant.TenantModel{
+			OrgNodeID: node.ID,
+		},
+	}
+	if err := db.Create(&shift).Error; err != nil {
+		t.Fatalf("创建测试班次失败: %v", err)
+	}
+	if err := db.Exec(`INSERT INTO employee_groups (id, org_node_id, name) VALUES ('grp-001', ?, 'CT/MRI轮转1')`, node.ID).Error; err != nil {
+		t.Fatalf("创建测试分组失败: %v", err)
+	}
+	if err := db.Exec(`INSERT INTO shift_groups (id, org_node_id, shift_id, group_id, priority, is_active) VALUES ('sg-001', ?, 'shift-001', 'grp-001', 0, TRUE)`, node.ID).Error; err != nil {
+		t.Fatalf("创建测试班次分组关联失败: %v", err)
+	}
+
+	items, err := svc.GetShiftGroups(ctx, shift.ID)
+	if err != nil {
+		t.Fatalf("GetShiftGroups() error = %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("len(items) = %d, want 1", len(items))
+	}
+	if items[0].GroupName == nil || *items[0].GroupName != "CT/MRI轮转1" {
+		t.Fatalf("group_name = %v, want CT/MRI轮转1", items[0].GroupName)
+	}
+}
+
+func TestService_List_IncludesGroupNamesInSummary(t *testing.T) {
+	svc, db, node := setupShiftService(t)
+	ctx := tenant.WithOrgNode(context.Background(), node.ID, node.Path)
+
+	shift := Shift{
+		ID:        "shift-001",
+		Name:      "下夜班",
+		Code:      "night",
+		Type:      ShiftTypeRegular,
+		StartTime: "00:00",
+		EndTime:   "08:00",
+		Duration:  8,
+		Color:     "#ffffff",
+		Priority:  1,
+		Status:    StatusActive,
+		TenantModel: tenant.TenantModel{
+			OrgNodeID: node.ID,
+		},
+	}
+	if err := db.Create(&shift).Error; err != nil {
+		t.Fatalf("创建测试班次失败: %v", err)
+	}
+	if err := db.Exec(`INSERT INTO employee_groups (id, org_node_id, name) VALUES ('grp-001', ?, '江北夜班')`, node.ID).Error; err != nil {
+		t.Fatalf("创建测试分组失败: %v", err)
+	}
+	if err := db.Exec(`INSERT INTO employee_groups (id, org_node_id, name) VALUES ('grp-002', ?, '本部夜班')`, node.ID).Error; err != nil {
+		t.Fatalf("创建测试分组失败: %v", err)
+	}
+	if err := db.Exec(`INSERT INTO shift_groups (id, org_node_id, shift_id, group_id, priority, is_active) VALUES ('sg-001', ?, 'shift-001', 'grp-001', 0, TRUE)`, node.ID).Error; err != nil {
+		t.Fatalf("创建测试班次分组关联失败: %v", err)
+	}
+	if err := db.Exec(`INSERT INTO shift_groups (id, org_node_id, shift_id, group_id, priority, is_active) VALUES ('sg-002', ?, 'shift-001', 'grp-002', 1, TRUE)`, node.ID).Error; err != nil {
+		t.Fatalf("创建测试班次分组关联失败: %v", err)
+	}
+
+	items, err := svc.List(ctx)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("len(items) = %d, want 1", len(items))
+	}
+	if len(items[0].GroupNames) != 2 {
+		t.Fatalf("len(group_names) = %d, want 2", len(items[0].GroupNames))
+	}
+	if items[0].GroupNames[0] != "江北夜班" || items[0].GroupNames[1] != "本部夜班" {
+		t.Fatalf("group_names = %v, want [江北夜班 本部夜班]", items[0].GroupNames)
+	}
+	if items[0].GroupSummary != "江北夜班、本部夜班" {
+		t.Fatalf("group_summary = %q, want %q", items[0].GroupSummary, "江北夜班、本部夜班")
 	}
 }
 

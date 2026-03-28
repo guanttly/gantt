@@ -16,6 +16,8 @@ type PageEnvelope = {
   size: number
 }
 
+const AUTH_EXPIRED_MESSAGE = '登录状态已失效，请刷新页面后重试；如仍无法继续，请重新登录。'
+
 function isPlainObject(value: unknown): value is Record<string, any> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
@@ -71,11 +73,38 @@ function normalizeErrorBody(value: unknown) {
   return value
 }
 
+function withFriendlyAuthMessage(value: unknown, status?: number) {
+  if (status !== 401) {
+    return value
+  }
+
+  if (isPlainObject(value)) {
+    return {
+      ...value,
+      message: AUTH_EXPIRED_MESSAGE,
+    }
+  }
+
+  return {
+    message: AUTH_EXPIRED_MESSAGE,
+  }
+}
+
 function getErrorMessage(value: unknown): string {
   if (isPlainObject(value) && typeof value.message === 'string' && value.message.trim()) {
     return value.message
   }
   return '请求失败'
+}
+
+function isAuthEntryRequest(url?: string): boolean {
+  if (!url) {
+    return false
+  }
+  return url.includes('/app/scheduling/auth/login')
+    || url.includes('/app/scheduling/auth/refresh')
+    || url.includes('/app/scheduling/auth/password/reset')
+    || url.includes('/app/scheduling/auth/password/force-reset')
 }
 
 // ============ Axios 实例 ============
@@ -139,7 +168,14 @@ client.interceptors.response.use(
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
 
     if (error.response) {
-      error.response.data = normalizeErrorBody(error.response.data)
+      error.response.data = withFriendlyAuthMessage(
+        normalizeErrorBody(error.response.data),
+        error.response.status,
+      )
+    }
+
+    if (isAuthEntryRequest(originalRequest?.url)) {
+      return Promise.reject(error)
     }
 
     // 非 401 或已重试 → 直接抛出
@@ -168,7 +204,7 @@ client.interceptors.response.use(
       if (!refreshToken)
         throw new Error('no_refresh_token')
 
-      const res = await axios.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
+      const res = await axios.post('/api/v1/app/scheduling/auth/refresh', { refresh_token: refreshToken })
       const payload = normalizeResponseBody(res.data) as { access_token: string, refresh_token?: string }
       const newToken = payload.access_token
       const newRefresh = payload.refresh_token

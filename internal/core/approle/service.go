@@ -109,6 +109,43 @@ func (s *Service) ListEmployeeRoles(ctx context.Context, employeeID string) ([]E
 	return mapEmployeeRoleRows(rows), nil
 }
 
+func (s *Service) ListEmployeeRolesBatch(ctx context.Context, employeeIDs []string) (map[string][]EmployeeAppRoleResponse, error) {
+	items := make(map[string][]EmployeeAppRoleResponse)
+	if len(employeeIDs) == 0 {
+		return items, nil
+	}
+
+	records, err := s.repo.ListEmployeesByIDs(ctx, employeeIDs)
+	if err != nil {
+		return nil, fmt.Errorf("查询员工失败: %w", err)
+	}
+	allowedIDs := make([]string, 0, len(records))
+	allowedSet := make(map[string]struct{}, len(records))
+	for _, record := range records {
+		if record.Status != "active" || !s.isNodePathInScope(ctx, record.Path) {
+			continue
+		}
+		allowedIDs = append(allowedIDs, record.ID)
+		allowedSet[record.ID] = struct{}{}
+		items[record.ID] = []EmployeeAppRoleResponse{}
+	}
+	if len(allowedIDs) == 0 {
+		return items, nil
+	}
+
+	rows, err := s.repo.ListEmployeeRolesByEmployeeIDs(ctx, allowedIDs)
+	if err != nil {
+		return nil, fmt.Errorf("查询员工应用角色失败: %w", err)
+	}
+	for _, row := range rows {
+		if _, ok := allowedSet[row.EmployeeID]; !ok {
+			continue
+		}
+		items[row.EmployeeID] = append(items[row.EmployeeID], mapEmployeeRoleRow(row))
+	}
+	return items, nil
+}
+
 func (s *Service) AssignEmployeeRole(ctx context.Context, employeeID string, input AssignEmployeeRoleInput, grantedBy string) (*EmployeeAppRoleResponse, error) {
 	if strings.TrimSpace(grantedBy) == "" {
 		return nil, ErrInvalidGrantedBy

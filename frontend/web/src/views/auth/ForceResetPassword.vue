@@ -39,6 +39,10 @@ const rules = {
 const formRef = ref()
 
 async function handleSubmit() {
+  if (loading.value) {
+    return
+  }
+
   try {
     await formRef.value?.validate()
   }
@@ -79,7 +83,7 @@ async function handleSubmit() {
         :model="form"
         :rules="rules"
         class="reset-form"
-        @keyup.enter="handleSubmit"
+        @submit.prevent="handleSubmit"
       >
         <el-form-item prop="newPassword">
           <el-input
@@ -89,6 +93,7 @@ async function handleSubmit() {
             size="large"
             show-password
             :prefix-icon="Lock"
+            :disabled="loading"
           />
         </el-form-item>
 
@@ -100,6 +105,7 @@ async function handleSubmit() {
             size="large"
             show-password
             :prefix-icon="Lock"
+            :disabled="loading"
           />
         </el-form-item>
 
@@ -109,7 +115,7 @@ async function handleSubmit() {
             size="large"
             :loading="loading"
             class="reset-btn"
-            @click="handleSubmit"
+            native-type="submit"
           >
             确认重置
           </el-button>

@@ -40,6 +40,21 @@ type EmployeeResponse struct {
 	OrgNodeName        string `json:"org_node_name"`
 	OrgNodePathDisplay string `json:"org_node_path_display"`
 	OrgNodeType        string `json:"org_node_type"`
+	AppRoles           []EmployeeAppRoleInfo `json:"app_roles,omitempty"`
+}
+
+type EmployeeAppRoleInfo struct {
+	ID              string  `json:"id"`
+	EmployeeID      string  `json:"employee_id"`
+	OrgNodeID       string  `json:"org_node_id"`
+	OrgNodeName     string  `json:"org_node_name"`
+	AppRole         string  `json:"app_role"`
+	Source          string  `json:"source"`
+	SourceGroupID   *string `json:"source_group_id,omitempty"`
+	SourceGroupName *string `json:"source_group_name,omitempty"`
+	GrantedBy       string  `json:"granted_by"`
+	GrantedAt       string  `json:"granted_at"`
+	ExpiresAt       *string `json:"expires_at,omitempty"`
 }
 
 // TableName 指定表名。

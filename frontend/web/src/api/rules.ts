@@ -17,32 +17,32 @@ import client from './client'
 
 /** 规则列表 */
 export function listRules(params?: ListParams) {
-  return client.get<PaginatedResponse<Rule>>('/rules/', { params }).then(r => r.data)
+  return client.get<PaginatedResponse<Rule>>('/app/rules/', { params }).then(r => r.data)
 }
 
 /** 获取当前科室生效规则 */
 export function getEffectiveRules(params?: EffectiveRulesParams) {
-  return client.get<Rule[]>('/rules/effective', { params }).then(r => r.data)
+  return client.get<Rule[]>('/app/rules/effective', { params }).then(r => r.data)
 }
 
 /** 创建规则 */
 export function createRule(data: CreateRuleRequest) {
-  return client.post<Rule>('/rules/', data).then(r => r.data)
+  return client.post<Rule>('/app/rules/', data).then(r => r.data)
 }
 
 /** 获取规则详情 */
 export function getRule(id: string) {
-  return client.get<Rule>(`/rules/${id}`).then(r => r.data)
+  return client.get<Rule>(`/app/rules/${id}`).then(r => r.data)
 }
 
 /** 更新规则 */
 export function updateRule(id: string, data: UpdateRuleRequest) {
-  return client.put<Rule>(`/rules/${id}`, data).then(r => r.data)
+  return client.put<Rule>(`/app/rules/${id}`, data).then(r => r.data)
 }
 
 /** 删除规则 */
 export function deleteRule(id: string) {
-  return client.delete(`/rules/${id}`)
+  return client.delete(`/app/rules/${id}`)
 }
 
 /** 启用/禁用规则 */
@@ -52,7 +52,7 @@ export function toggleRuleStatus(id: string, enabled: boolean) {
 
 /** 验证规则 */
 export function validateRules(data: ValidateRuleRequest) {
-  return client.post<ValidateRuleResponse>('/rules/validate', data).then(r => r.data)
+  return client.post<ValidateRuleResponse>('/app/rules/validate', data).then(r => r.data)
 }
 
 // ==================== 规则关联 ====================

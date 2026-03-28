@@ -57,6 +57,13 @@ func (r *Repository) List(ctx context.Context, opts ListOptions) ([]Employee, in
 	var total int64
 
 	tx := tenant.ApplyScope(ctx, r.db.WithContext(ctx)).Model(&Employee{})
+	if opts.PrioritizeAdmins {
+		adminRoleSubQuery := r.db.WithContext(tenant.SkipTenantGuard(ctx)).
+			Table("employee_app_roles").
+			Select("DISTINCT employee_id").
+			Where("app_role = ?", "app:schedule_admin")
+		tx = tx.Joins("LEFT JOIN (?) AS admin_roles ON admin_roles.employee_id = employees.id", adminRoleSubQuery)
+	}
 
 	// 搜索过滤
 	if opts.Keyword != "" {
@@ -83,7 +90,17 @@ func (r *Repository) List(ctx context.Context, opts ListOptions) ([]Employee, in
 	if offset < 0 {
 		offset = 0
 	}
-	err := tx.Order("name ASC").
+	ordered := tx
+	if opts.PrioritizeAdmins {
+		ordered = ordered.
+			Order("CASE WHEN admin_roles.employee_id IS NULL THEN 1 ELSE 0 END ASC").
+			Order("CASE WHEN employees.employee_no IS NULL OR employees.employee_no = '' THEN 1 ELSE 0 END ASC").
+			Order("employees.employee_no ASC").
+			Order("employees.name ASC")
+	} else {
+		ordered = ordered.Order("name ASC")
+	}
+	err := ordered.
 		Offset(offset).
 		Limit(opts.Size).
 		Find(&employees).Error
@@ -120,4 +137,5 @@ type ListOptions struct {
 	Status   string `json:"status"`
 	Position string `json:"position"`
 	Category string `json:"category"`
+	PrioritizeAdmins bool `json:"prioritize_admins"`
 }

@@ -4,7 +4,7 @@
 export interface User {
   id: string
   username: string
-  email: string
+  email?: string
   phone?: string
   must_reset_pwd: boolean
 }
@@ -55,9 +55,8 @@ export interface AppPermissionsResponse {
 
 /** 登录请求 */
 export interface LoginRequest {
-  username: string
+  login_id: string
   password: string
-  org_node_id?: string
 }
 
 /** 注册请求 */

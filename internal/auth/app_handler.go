@@ -22,8 +22,8 @@ func (h *AppHandler) Login(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "请求参数格式错误")
 		return
 	}
-	if input.LoginID == "" || input.Password == "" || input.OrgNodeID == "" {
-		response.BadRequest(w, "login_id、password、org_node_id 为必填项")
+	if input.LoginID == "" || input.Password == "" {
+		response.BadRequest(w, "login_id、password 为必填项")
 		return
 	}
 	result, err := h.svc.Login(r.Context(), input)
@@ -123,6 +123,8 @@ func (h *AppHandler) handleError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrUserNotFound):
 		response.NotFound(w, err.Error())
 	case errors.Is(err, ErrNoNodePermission):
+		response.BadRequest(w, err.Error())
+	case errors.Is(err, ErrAppLoginIDAmbiguous):
 		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrEmployeeInactive):
 		response.Forbidden(w, err.Error())

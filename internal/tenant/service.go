@@ -410,6 +410,11 @@ func (s *Service) Move(ctx context.Context, id string, input MoveNodeInput) (*Or
 	return s.repo.GetByID(ctx, id)
 }
 
+// GetByIDs 根据 ID 列表批量查询节点。
+func (s *Service) GetByIDs(ctx context.Context, ids []string) ([]OrgNode, error) {
+	return s.repo.GetByIDs(ctx, ids)
+}
+
 // GetDescendantIDs 获取某节点及其所有活跃后代的 ID 列表。
 func (s *Service) GetDescendantIDs(ctx context.Context, nodePath string) ([]string, error) {
 	return s.repo.GetDescendantIDs(ctx, nodePath)

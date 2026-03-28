@@ -5,9 +5,8 @@ import "time"
 const appRoleName = "app:employee"
 
 type AppLoginInput struct {
-	LoginID   string `json:"login_id"`
-	Password  string `json:"password"`
-	OrgNodeID string `json:"org_node_id"`
+	LoginID  string `json:"login_id"`
+	Password string `json:"password"`
 }
 
 type AppEmployeeInfo struct {

@@ -36,7 +36,7 @@ func NewAIAssistedPipeline(deps *AIAssistedDeps) *Pipeline {
 			EmployeeRepo: deps.EmployeeRepo,
 			LeaveRepo:    deps.LeaveRepo,
 		},
-		&step.PhaseZeroStep{},
+		&step.PhaseZeroStep{FixedAssignmentProvider: deps.ShiftService},
 		&step.PhaseOneStep{},
 		&step.AISelectStep{
 			Provider: deps.AIProvider,

@@ -2,23 +2,26 @@
 import type { Router } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
-const PUBLIC_ROUTES = ['/login', '/force-reset-password']
+const LOGIN_ROUTE = '/login'
+const FORCE_RESET_PASSWORD_ROUTE = '/force-reset-password'
 
 export function setupGuards(router: Router) {
   router.beforeEach(async (to, _from, next) => {
     const auth = useAuthStore()
 
     // 1. 公开页面
-    if (PUBLIC_ROUTES.includes(to.path)) {
-      // 已登录则跳首页
-      if (auth.isLoggedIn)
+    if (to.path === LOGIN_ROUTE) {
+      if (auth.isLoggedIn) {
+        if (auth.mustResetPwd)
+          return next(FORCE_RESET_PASSWORD_ROUTE)
         return next('/')
+      }
       return next()
     }
 
     // 2. 未登录 → 跳转登录页
     if (!auth.isLoggedIn) {
-      return next({ path: '/login', query: { redirect: to.fullPath } })
+      return next({ path: LOGIN_ROUTE, query: { redirect: to.fullPath } })
     }
 
     // 3. 已登录但无用户信息 → 尝试恢复
@@ -28,13 +31,17 @@ export function setupGuards(router: Router) {
       }
       catch {
         auth.logout()
-        return next({ path: '/login', query: { redirect: to.fullPath } })
+        return next({ path: LOGIN_ROUTE, query: { redirect: to.fullPath } })
       }
     }
 
     // 3.5. 强制重置密码检查
-    if (auth.mustResetPwd && to.path !== '/force-reset-password') {
-      return next('/force-reset-password')
+    if (auth.mustResetPwd && to.path !== FORCE_RESET_PASSWORD_ROUTE) {
+      return next(FORCE_RESET_PASSWORD_ROUTE)
+    }
+
+    if (!auth.mustResetPwd && to.path === FORCE_RESET_PASSWORD_ROUTE) {
+      return next('/')
     }
 
     // 4. 未选择节点 → 跳转节点选择页

@@ -2,9 +2,11 @@
 import type { AppPermission, AppPermissionsResponse, AppRoleGrant, AppRolesResponse, CurrentNode, OrgNode, RoleName, User, UserInfoResponse } from '@/types/auth'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { getMe, getMyAppPermissions, getMyAppRoles, login as apiLogin, refreshToken as apiRefresh, switchNode as apiSwitch } from '@/api/auth'
+import { getMe, getMyAppPermissions, getMyAppRoles, login as apiLogin, refreshToken as apiRefresh } from '@/api/auth'
 import { clearTokens, getAccessToken, getRefreshToken, setAccessToken, setRefreshToken } from '@/api/client'
 import { ROLE_HIERARCHY } from '@/types/auth'
+
+const SCHEDULER_PERMISSIONS = ['schedule:create', 'schedule:execute', 'schedule:adjust', 'schedule:publish'] as const
 
 export const useAuthStore = defineStore('auth', () => {
   // ======== 状态 ========
@@ -21,7 +23,7 @@ export const useAuthStore = defineStore('auth', () => {
   const isLoggedIn = computed(() => !!accessToken.value)
   const currentNodeId = computed(() => currentNode.value?.node_id ?? null)
   const currentNodePath = computed(() => currentNode.value?.node_path ?? '')
-  const currentRole = computed(() => (currentNode.value?.role_name ?? '') as RoleName)
+  const currentRole = computed(() => resolveRoleName(currentNode.value?.role_name))
 
   // ======== 方法 ========
 
@@ -36,6 +38,34 @@ export const useAuthStore = defineStore('auth', () => {
 
   function hasAnyPermission(permissions: Array<AppPermission | string>): boolean {
     return permissions.some(permission => hasPermission(permission))
+  }
+
+  function resolveRoleName(fallback?: string): RoleName {
+    if (appRoles.value.some(role => role.app_role === 'app:schedule_admin') || hasPermission('app-role:manage')) {
+      return 'dept_admin'
+    }
+    if (appRoles.value.some(role => role.app_role === 'app:scheduler') || hasAnyPermission([...SCHEDULER_PERMISSIONS])) {
+      return 'scheduler'
+    }
+    if (fallback && ROLE_HIERARCHY.includes(fallback as RoleName)) {
+      return fallback as RoleName
+    }
+    return 'employee'
+  }
+
+  function syncNodeRole() {
+    if (!currentNode.value) {
+      availableNodes.value = []
+      return
+    }
+    const roleName = resolveRoleName(currentNode.value.role_name)
+    currentNode.value = {
+      ...currentNode.value,
+      role_name: roleName,
+    }
+    availableNodes.value = [{
+      ...currentNode.value,
+    } as OrgNode]
   }
 
   async function syncAppAccess() {
@@ -56,12 +86,14 @@ export const useAuthStore = defineStore('auth', () => {
       appRoles.value = roles.app_roles || []
       appPermissions.value = (permissions.permissions || []) as AppPermission[]
       boundEmployeeId.value = permissions.employee_id || roles.employee_id || null
+      syncNodeRole()
     }
     catch (error: any) {
       if (error?.response?.status === 403 || error?.response?.status === 404) {
         appRoles.value = []
         appPermissions.value = []
         boundEmployeeId.value = null
+        syncNodeRole()
         return
       }
       throw error
@@ -70,7 +102,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   /** 登录 */
   async function login(username: string, password: string) {
-    const res = await apiLogin({ username, password })
+    const res = await apiLogin({ login_id: username, password })
     accessToken.value = res.access_token
     setAccessToken(res.access_token)
     setRefreshToken(res.refresh_token)
@@ -84,15 +116,22 @@ export const useAuthStore = defineStore('auth', () => {
 
   /** 选择/切换组织节点 */
   async function selectNode(nodeId: string) {
-    const res = await apiSwitch({ org_node_id: nodeId })
-    accessToken.value = res.access_token
-    setAccessToken(res.access_token)
-    if (res.refresh_token)
-      setRefreshToken(res.refresh_token)
-    currentNode.value = res.current_node
-    availableNodes.value = res.available_nodes
-    await syncAppAccess()
-    return res
+    if (!currentNode.value) {
+      throw new Error('当前未登录')
+    }
+    if (nodeId !== currentNode.value.node_id) {
+      throw new Error('当前账号登录后已自动进入所属科室，不支持手动切换组织节点')
+    }
+    syncNodeRole()
+    return {
+      access_token: accessToken.value || '',
+      refresh_token: getRefreshToken() || '',
+      expires_in: 0,
+      user: user.value as User,
+      current_node: currentNode.value,
+      available_nodes: availableNodes.value,
+      must_reset_pwd: mustResetPwd.value,
+    }
   }
 
   /** 刷新 Token */
@@ -106,6 +145,10 @@ export const useAuthStore = defineStore('auth', () => {
     setAccessToken(res.access_token)
     if (res.refresh_token)
       setRefreshToken(res.refresh_token)
+    user.value = res.user
+    currentNode.value = res.current_node
+    availableNodes.value = res.available_nodes
+    mustResetPwd.value = res.must_reset_pwd
     await syncAppAccess()
     return res.access_token
   }

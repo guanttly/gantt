@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"gantt-saas/internal/auth"
 	"gantt-saas/internal/common/response"
@@ -22,6 +23,34 @@ func NewHandler(svc *Service) *Handler {
 
 func (h *Handler) ListEmployeeRoles(w http.ResponseWriter, r *http.Request) {
 	items, err := h.svc.ListEmployeeRoles(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.OK(w, items)
+}
+
+func (h *Handler) ListEmployeeRolesBatch(w http.ResponseWriter, r *http.Request) {
+	rawIDs := strings.TrimSpace(r.URL.Query().Get("employee_ids"))
+	if rawIDs == "" {
+		response.OK(w, map[string][]EmployeeAppRoleResponse{})
+		return
+	}
+	parts := strings.Split(rawIDs, ",")
+	employeeIDs := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		id := strings.TrimSpace(part)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		employeeIDs = append(employeeIDs, id)
+	}
+	items, err := h.svc.ListEmployeeRolesBatch(r.Context(), employeeIDs)
 	if err != nil {
 		h.handleError(w, err)
 		return
