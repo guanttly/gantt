@@ -32,6 +32,7 @@ const parsedRules = ref<DialogRule[]>([])
 const parsedDependencies = ref<ParsedRuleDependencyInfo[]>([])
 const parsedConflicts = ref<ParsedRuleConflictInfo[]>([])
 const step = ref<'input' | 'streaming' | 'preview'>('input')
+const previewTableRef = ref<any>()
 const shiftCatalog = ref<ShiftCatalogItem[]>([])
 const employeeCatalog = ref<Employee[]>([])
 const groupCatalog = ref<Array<{ id: string, name: string, code?: string }>>([])
@@ -957,6 +958,9 @@ function startEdit(idx: number) {
     scope_employees: r.scope_employees ? [...r.scope_employees] : [],
     scope_groups: r.scope_groups ? [...r.scope_groups] : [],
   }
+  nextTick(() => {
+    previewTableRef.value?.toggleRowExpansion?.(r, true)
+  })
 }
 
 function confirmEdit(idx: number) {
@@ -985,11 +989,18 @@ function confirmEdit(idx: number) {
   syncRuleValidation(r)
   r._editing = false
   delete editForm[idx]
+  nextTick(() => {
+    previewTableRef.value?.toggleRowExpansion?.(r, false)
+  })
 }
 
 function cancelEdit(idx: number) {
-  parsedRules.value[idx]._editing = false
+  const rule = parsedRules.value[idx]
+  rule._editing = false
   delete editForm[idx]
+  nextTick(() => {
+    previewTableRef.value?.toggleRowExpansion?.(rule, false)
+  })
 }
 
 // ======== 保存 ========
@@ -1157,7 +1168,7 @@ function handleClose() {
         <div class="save-error-text">{{ saveErrorMessage }}</div>
       </el-alert>
 
-      <el-table :data="parsedRules" border style="width: 100%; margin-top: 12px" :row-class-name="getTableRowClassName">
+      <el-table ref="previewTableRef" :data="parsedRules" border style="width: 100%; margin-top: 12px" :row-class-name="getTableRowClassName">
         <el-table-column type="expand">
           <template #default="{ row, $index }">
             <div v-if="row._editing" class="edit-panel">
