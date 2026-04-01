@@ -2,7 +2,6 @@ package checker
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"gantt-saas/internal/core/rule"
@@ -14,28 +13,24 @@ type ExclusiveChecker struct{}
 func (c *ExclusiveChecker) Type() string { return rule.SubTypeForbid }
 
 func (c *ExclusiveChecker) Check(ctx context.Context, r rule.Rule, checkCtx *CheckContext) CheckResult {
-	var cfg rule.ExclusiveShiftsConfig
-	if err := json.Unmarshal(r.Config, &cfg); err != nil {
-		return CheckResult{Pass: false, Reason: "config parse error"}
-	}
-
-	exclusiveSet := make(map[string]bool)
-	for _, sid := range cfg.ShiftIDs {
-		exclusiveSet[sid] = true
-	}
-
-	if !exclusiveSet[checkCtx.ShiftID] {
+	relatedShiftIDs, offsetDays, matched := r.ExclusiveSemantics().CounterpartShiftIDs(checkCtx.ShiftID)
+	if !matched || len(relatedShiftIDs) == 0 {
 		return CheckResult{Pass: true}
 	}
+	relatedSet := make(map[string]bool, len(relatedShiftIDs))
+	for _, sid := range relatedShiftIDs {
+		relatedSet[sid] = true
+	}
+	relatedDate := checkCtx.Date.AddDate(0, 0, offsetDays)
 
 	for _, a := range checkCtx.Assignments {
 		if a.EmployeeID != checkCtx.EmployeeID {
 			continue
 		}
-		if cfg.Scope == "same_day" && !a.Date.Equal(checkCtx.Date) {
+		if !a.Date.Equal(relatedDate) {
 			continue
 		}
-		if exclusiveSet[a.ShiftID] && a.ShiftID != checkCtx.ShiftID {
+		if relatedSet[a.ShiftID] {
 			return CheckResult{
 				Pass:   false,
 				Reason: fmt.Sprintf("shift %s conflicts with %s", checkCtx.ShiftID, a.ShiftID),

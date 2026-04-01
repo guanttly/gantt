@@ -51,8 +51,8 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if input.Name == "" || input.Category == "" || input.SubType == "" {
-		response.BadRequest(w, "name、category、sub_type 为必填项")
+	if input.Name == "" || input.Category == "" {
+		response.BadRequest(w, "name、category 为必填项")
 		return
 	}
 
@@ -68,6 +68,26 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Created(w, rl)
+}
+
+// BatchCreateParsed 批量保存 AI 解析后的规则。
+// POST /api/v1/rules/batch
+func (h *Handler) BatchCreateParsed(w http.ResponseWriter, r *http.Request) {
+	var input BatchCreateInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		response.BadRequest(w, "请求参数格式错误")
+		return
+	}
+	if len(input.ParsedRules) == 0 {
+		response.BadRequest(w, "parsed_rules 为必填项")
+		return
+	}
+	rules, err := h.svc.BatchCreateParsed(r.Context(), input)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.Created(w, rules)
 }
 
 // Update 更新规则。
@@ -127,6 +147,8 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrRuleNotFound):
 		response.NotFound(w, err.Error())
+	case errors.Is(err, ErrInvalidRuleType):
+		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrInvalidCategory):
 		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrInvalidSubType):
@@ -139,6 +161,8 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		response.BadRequest(w, err.Error())
 	case errors.Is(err, ErrNotDeptNode):
 		response.Forbidden(w, err.Error())
+	case errors.Is(err, ErrShiftReferenceNotFound):
+		response.BadRequest(w, err.Error())
 	default:
 		response.InternalError(w, "内部错误")
 	}

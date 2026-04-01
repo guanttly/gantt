@@ -145,7 +145,6 @@ func main() {
 
 type appDependencies struct {
 	jwtManager          *auth.JWTManager
-	appJWTManager       *auth.JWTManager
 	appRoleService      *approle.Service
 	tenantHandler       *tenant.Handler
 	authHandler         *auth.Handler
@@ -186,15 +185,9 @@ func initDependencies(
 		AccessTokenTTL:  cfg.JWT.AccessTokenTTL,
 		RefreshTokenTTL: cfg.JWT.RefreshTokenTTL,
 	})
-	appJWTManager := auth.NewJWTManager(auth.JWTConfig{
-		Secret:          cfg.JWT.Secret,
-		Issuer:          cfg.JWT.Issuer + ":app",
-		AccessTokenTTL:  cfg.JWT.AccessTokenTTL,
-		RefreshTokenTTL: cfg.JWT.RefreshTokenTTL,
-	})
 	authSvc := auth.NewService(authRepo, tenantRepo, jwtManager, rdb)
 	authHandler := auth.NewHandler(authSvc)
-	appAuthSvc := auth.NewAppService(authRepo, appJWTManager)
+	appAuthSvc := auth.NewAppService(authRepo, jwtManager)
 	appAuthHandler := auth.NewAppHandler(appAuthSvc)
 	appRoleRepo := approle.NewRepository(db)
 	appRoleSvc := approle.NewService(appRoleRepo, tenantRepo)
@@ -238,6 +231,12 @@ func initDependencies(
 
 	quotaRepo := quota.NewRepository(db)
 	quotaMgr := quota.NewManager(quotaRepo, cfg.AI.Quota.DefaultMonthlyTokens, logger)
+
+	// 从数据库加载 AI 配置（管理后台保存的设置），合并到文件配置
+	if err := admin.LoadAIConfigFromDB(db, &cfg.AI); err != nil {
+		logger.Warn("从数据库加载 AI 配置失败，使用文件配置", zap.Error(err))
+	}
+
 	factory := ai.NewFactory(&cfg.AI, logger)
 	var aiHandler *aiapi.Handler
 	if factory.HasProvider() {
@@ -296,7 +295,6 @@ func initDependencies(
 
 	return &appDependencies{
 		jwtManager:          jwtManager,
-		appJWTManager:       appJWTManager,
 		appRoleService:      appRoleSvc,
 		tenantHandler:       tenantHandler,
 		authHandler:         authHandler,
@@ -406,6 +404,7 @@ func registerRoutes(srv *appserver.Server, deps *appDependencies) {
 
 		r.Group(func(r chi.Router) {
 			r.Use(auth.AuthMiddleware(deps.jwtManager))
+			r.Use(auth.RequirePlatform(auth.PlatformAdmin))
 			r.Use(tenant.Middleware())
 			r.Use(audit.Middleware(deps.auditLogger))
 
@@ -418,9 +417,6 @@ func registerRoutes(srv *appserver.Server, deps *appDependencies) {
 			leave.RegisterRoutes(r, deps.leaveHandler, deps.appRoleService)
 			rule.RegisterRoutes(r, deps.ruleHandler, deps.appRoleService)
 			schedule.RegisterRoutes(r, deps.scheduleHandler, deps.appRoleService)
-			if deps.aiHandler != nil {
-				aiapi.RegisterRoutes(r, deps.aiHandler)
-			}
 
 			r.Group(func(r chi.Router) {
 				r.Use(auth.RequirePermission("org:write"))
@@ -448,7 +444,8 @@ func registerRoutes(srv *appserver.Server, deps *appDependencies) {
 		})
 
 		r.Group(func(r chi.Router) {
-			r.Use(auth.AuthMiddleware(deps.appJWTManager))
+			r.Use(auth.AuthMiddleware(deps.jwtManager))
+			r.Use(auth.RequirePlatform(auth.PlatformApp))
 			r.Use(tenant.Middleware())
 			r.Use(audit.Middleware(deps.auditLogger))
 
@@ -464,6 +461,16 @@ func registerRoutes(srv *appserver.Server, deps *appDependencies) {
 			group.RegisterAppRefRoutes(r, deps.groupHandler)
 			shift.RegisterAppRefRoutes(r, deps.shiftHandler)
 			rule.RegisterAppRefRoutes(r, deps.ruleHandler)
+		})
+
+		// 共享路由组：两端通用（仅需认证，不限平台）
+		r.Group(func(r chi.Router) {
+			r.Use(auth.AuthMiddleware(deps.jwtManager))
+			r.Use(tenant.Middleware())
+
+			if deps.aiHandler != nil {
+				aiapi.RegisterRoutes(r, deps.aiHandler)
+			}
 		})
 	})
 }

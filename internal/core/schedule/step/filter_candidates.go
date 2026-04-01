@@ -7,6 +7,7 @@ import (
 
 	"gantt-saas/internal/core/employee"
 	"gantt-saas/internal/core/leave"
+	"gantt-saas/internal/core/rule"
 )
 
 // GroupMemberProvider 提供分组成员查询能力。
@@ -68,6 +69,10 @@ func (s *FilterCandidatesStep) Execute(ctx context.Context, state *ScheduleState
 		}
 	}
 
+	if err := s.loadRuleScopedGroups(ctx, state); err != nil {
+		return err
+	}
+
 	// 2. 查询排班周期内的已批准请假记录
 	leaveList, _, err := s.LeaveRepo.List(ctx, leave.ListOptions{
 		Page:      1,
@@ -111,6 +116,32 @@ func (s *FilterCandidatesStep) Execute(ctx context.Context, state *ScheduleState
 		}
 	}
 
+	return nil
+}
+
+func (s *FilterCandidatesStep) loadRuleScopedGroups(ctx context.Context, state *ScheduleState) error {
+	groupIDs := rule.CollectGroupScopeIDs(state.EffectiveRules)
+	if len(groupIDs) == 0 {
+		return nil
+	}
+	if s.GroupMemberProvider == nil {
+		return fmt.Errorf("规则适用范围包含分组，但未配置分组成员查询器")
+	}
+	if state.EmployeeGroupIDs == nil {
+		state.EmployeeGroupIDs = make(map[string]map[string]bool)
+	}
+	for _, groupID := range groupIDs {
+		memberIDs, err := s.GroupMemberProvider.GetMemberEmployeeIDs(ctx, groupID)
+		if err != nil {
+			return fmt.Errorf("查询规则适用分组成员失败: %w", err)
+		}
+		for _, employeeID := range memberIDs {
+			if state.EmployeeGroupIDs[employeeID] == nil {
+				state.EmployeeGroupIDs[employeeID] = make(map[string]bool)
+			}
+			state.EmployeeGroupIDs[employeeID][groupID] = true
+		}
+	}
 	return nil
 }
 

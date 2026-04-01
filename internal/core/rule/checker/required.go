@@ -14,9 +14,33 @@ type RequiredChecker struct{}
 func (c *RequiredChecker) Type() string { return rule.SubTypeMust }
 
 func (c *RequiredChecker) Check(ctx context.Context, r rule.Rule, checkCtx *CheckContext) CheckResult {
+	requiredShiftIDs, offsetDays, matched := r.RequiredTogetherSemantics().RequiredShiftIDsForTarget(checkCtx.ShiftID)
+	if matched && len(requiredShiftIDs) > 0 {
+		requiredSet := make(map[string]bool, len(requiredShiftIDs))
+		for _, requiredShiftID := range requiredShiftIDs {
+			requiredSet[requiredShiftID] = true
+		}
+		requiredDate := checkCtx.Date.AddDate(0, 0, offsetDays)
+		for _, a := range checkCtx.Assignments {
+			if a.EmployeeID == checkCtx.EmployeeID && a.Date.Equal(requiredDate) && requiredSet[a.ShiftID] {
+				return CheckResult{Pass: true}
+			}
+		}
+		return CheckResult{
+			Pass:   false,
+			Reason: fmt.Sprintf("employee %s must also be scheduled on required shifts before %s", checkCtx.EmployeeID, checkCtx.ShiftID),
+		}
+	}
+	if len(r.Config) == 0 {
+		return CheckResult{Pass: true}
+	}
+
 	var cfg rule.RequiredTogetherConfig
 	if err := json.Unmarshal(r.Config, &cfg); err != nil {
 		return CheckResult{Pass: false, Reason: "config parse error"}
+	}
+	if cfg.ShiftID == "" || len(cfg.EmployeeIDs) == 0 {
+		return CheckResult{Pass: true}
 	}
 
 	if cfg.ShiftID != checkCtx.ShiftID {

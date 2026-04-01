@@ -16,11 +16,12 @@ type Assignment struct {
 
 // CheckContext 约束检查上下文。
 type CheckContext struct {
-	EmployeeID  string
-	ShiftID     string
-	Date        time.Time
-	Assignments []Assignment
-	Candidates  []string
+	EmployeeID       string
+	ShiftID          string
+	Date             time.Time
+	Assignments      []Assignment
+	Candidates       []string
+	EmployeeGroupIDs map[string]bool
 }
 
 // CheckResult 检查结果。
@@ -52,8 +53,15 @@ func Get(subType string) Checker {
 // ValidateAll 批量校验。
 func ValidateAll(ctx context.Context, rules []rule.Rule, checkCtx *CheckContext) []CheckResult {
 	results := make([]CheckResult, 0, len(rules))
+	activeRules := make([]rule.Rule, 0, len(rules))
 	for _, r := range rules {
 		if !r.IsEnabled {
+			continue
+		}
+		if !r.AppliesToEmployee(checkCtx.EmployeeID, checkCtx.EmployeeGroupIDs) {
+			continue
+		}
+		if rule.ShouldSkipRuleInConflictContext(r, activeRules, checkCtx.EmployeeID, checkCtx.EmployeeGroupIDs, checkCtx.ShiftID) {
 			continue
 		}
 		c := Get(r.SubType)
@@ -64,6 +72,9 @@ func ValidateAll(ctx context.Context, rules []rule.Rule, checkCtx *CheckContext)
 		result.RuleID = r.ID
 		result.RuleName = r.Name
 		results = append(results, result)
+		if r.AppliesToShiftContext(checkCtx.ShiftID) {
+			activeRules = append(activeRules, r)
+		}
 	}
 	return results
 }

@@ -122,11 +122,11 @@ func (s *AppService) GetMe(ctx context.Context, claims *Claims) (*AppMeResponse,
 }
 
 func (s *AppService) buildLoginResponse(emp *appEmployeeRecord) (*AppLoginResponse, error) {
-	accessToken, err := s.jwt.GenerateAccessToken(emp.ID, emp.OrgNodeID, emp.OrgNodePath, appRoleName)
+	accessToken, err := s.jwt.GenerateAccessToken(emp.ID, emp.OrgNodeID, emp.OrgNodePath, appRoleName, PlatformApp)
 	if err != nil {
 		return nil, fmt.Errorf("签发 Access Token 失败: %w", err)
 	}
-	refreshToken, err := s.jwt.GenerateRefreshToken(emp.ID, emp.OrgNodeID, emp.OrgNodePath, appRoleName)
+	refreshToken, err := s.jwt.GenerateRefreshToken(emp.ID, emp.OrgNodeID, emp.OrgNodePath, appRoleName, PlatformApp)
 	if err != nil {
 		return nil, fmt.Errorf("签发 Refresh Token 失败: %w", err)
 	}

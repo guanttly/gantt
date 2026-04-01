@@ -2,8 +2,10 @@ package observability
 
 import (
 	"context"
+	"errors"
 
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
 	"time"
@@ -61,7 +63,11 @@ func (l *GormLogger) Trace(_ context.Context, begin time.Time, fc func() (sql st
 	}
 
 	if err != nil {
-		l.zapLogger.Error("SQL Error", append(fields, zap.Error(err))...)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			l.zapLogger.Debug("Record Not Found", append(fields, zap.Error(err))...)
+		} else {
+			l.zapLogger.Error("SQL Error", append(fields, zap.Error(err))...)
+		}
 		return
 	}
 

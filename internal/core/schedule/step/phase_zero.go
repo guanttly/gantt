@@ -3,6 +3,7 @@ package step
 import (
 	"context"
 	"encoding/json"
+	"sort"
 
 	"gantt-saas/internal/core/rule"
 
@@ -26,39 +27,77 @@ func (s *PhaseZeroStep) Execute(ctx context.Context, state *ScheduleState) error
 	if err := s.applyShiftFixedAssignments(ctx, state); err != nil {
 		return err
 	}
+	if err := s.applyLegacyFixedScheduleRules(state); err != nil {
+		return err
+	}
+	return nil
+}
 
-	for _, r := range state.EffectiveRules {
-		if r.Category != rule.CategoryConstraint || r.SubType != rule.SubTypeMust {
+func (s *PhaseZeroStep) applyLegacyFixedScheduleRules(state *ScheduleState) error {
+	if state == nil || state.Config == nil || len(state.ShiftOrder) == 0 {
+		return nil
+	}
+
+	employeeIDsByShift := make(map[string]map[string]struct{})
+	for _, currentRule := range state.EffectiveRules {
+		if currentRule.Category != rule.CategoryConstraint || currentRule.SubType != rule.SubTypeMust {
 			continue
 		}
 
 		var cfg rule.RequiredTogetherConfig
-		if err := json.Unmarshal(r.Config, &cfg); err != nil {
+		if err := json.Unmarshal(currentRule.Config, &cfg); err != nil {
 			continue
 		}
-
 		if cfg.Type != "fixed_schedule" && cfg.Type != "required_together" {
 			continue
 		}
+		if cfg.ShiftID == "" || len(cfg.EmployeeIDs) == 0 {
+			continue
+		}
+		if employeeIDsByShift[cfg.ShiftID] == nil {
+			employeeIDsByShift[cfg.ShiftID] = make(map[string]struct{})
+		}
+		for _, employeeID := range cfg.EmployeeIDs {
+			if employeeID == "" {
+				continue
+			}
+			employeeIDsByShift[cfg.ShiftID][employeeID] = struct{}{}
+		}
+	}
 
-		// 对于 required_together 规则，将指定员工分配到指定班次
-		for _, empID := range cfg.EmployeeIDs {
-			for _, sh := range state.ShiftOrder {
-				if sh.ID != cfg.ShiftID {
+	for _, sh := range state.ShiftOrder {
+		requirements := state.Config.Requirements[sh.ID]
+		if len(requirements) == 0 {
+			continue
+		}
+		employeeIDs := sortedEmployeeIDs(employeeIDsByShift[sh.ID])
+		for _, employeeID := range employeeIDs {
+			activeRules := rule.ActiveRulesForShiftContext(state.EffectiveRules, employeeID, state.EmployeeGroupIDs[employeeID], sh.ID)
+			for _, activeRule := range activeRules {
+				if activeRule.Category != rule.CategoryConstraint || activeRule.SubType != rule.SubTypeMust {
 					continue
 				}
-				dates := map[string]int{}
-				if state.Config != nil {
-					dates = state.Config.Requirements[sh.ID]
+				var cfg rule.RequiredTogetherConfig
+				if err := json.Unmarshal(activeRule.Config, &cfg); err != nil {
+					continue
 				}
-				for dateStr := range dates {
-					if state.IsOccupiedForShift(empID, sh.ID, dateStr) {
+				if cfg.Type != "fixed_schedule" && cfg.Type != "required_together" {
+					continue
+				}
+				if cfg.ShiftID != sh.ID {
+					continue
+				}
+				if !containsRuleEmployee(cfg.EmployeeIDs, employeeID) {
+					continue
+				}
+				for dateStr := range requirements {
+					if state.IsOccupiedForShift(employeeID, sh.ID, dateStr) {
 						continue
 					}
 					state.Assignments = append(state.Assignments, Assignment{
 						ID:         uuid.New().String(),
 						ScheduleID: state.ScheduleID,
-						EmployeeID: empID,
+						EmployeeID: employeeID,
 						ShiftID:    sh.ID,
 						Date:       dateStr,
 						Source:     SourceFixed,
@@ -67,7 +106,29 @@ func (s *PhaseZeroStep) Execute(ctx context.Context, state *ScheduleState) error
 			}
 		}
 	}
+
 	return nil
+}
+
+func sortedEmployeeIDs(employeeSet map[string]struct{}) []string {
+	if len(employeeSet) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(employeeSet))
+	for employeeID := range employeeSet {
+		result = append(result, employeeID)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func containsRuleEmployee(employeeIDs []string, target string) bool {
+	for _, employeeID := range employeeIDs {
+		if employeeID == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *PhaseZeroStep) applyShiftFixedAssignments(ctx context.Context, state *ScheduleState) error {

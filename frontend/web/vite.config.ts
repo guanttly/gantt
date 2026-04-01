@@ -70,6 +70,19 @@ export default defineConfig(({ mode }) => {
           ws: true,
           changeOrigin: true,
         },
+        // SSE 流式代理（必须关闭缓冲，在通用 API 代理之前匹配）
+        '^/api/v1/ai/parse-rules-stream': {
+          target: 'http://localhost:8080',
+          changeOrigin: true,
+          headers: { 'Accept': 'text/event-stream' },
+          configure: (proxy: any) => {
+            proxy.on('proxyRes', (proxyRes: any) => {
+              // 确保 vite proxy 不缓冲 SSE 响应
+              proxyRes.headers['cache-control'] = 'no-cache'
+              proxyRes.headers['x-accel-buffering'] = 'no'
+            })
+          },
+        },
         // API 代理
         '^/api': {
           target: 'http://localhost:8080',

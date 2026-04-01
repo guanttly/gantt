@@ -97,8 +97,9 @@ func TestSharedFixture_PhaseZeroMatchesFixedAssignmentSemantics(t *testing.T) {
 	})
 	state.ShiftOrder = makeShifts(fixture.FixedAssignments.ShiftID)
 	state.EffectiveRules = []rule.Rule{{
-		Category: rule.CategoryConstraint,
-		SubType:  rule.SubTypeMust,
+		Category:  rule.CategoryConstraint,
+		SubType:   rule.SubTypeMust,
+		IsEnabled: true,
 		Config: mustJSON(t, rule.RequiredTogetherConfig{
 			Type:        "fixed_schedule",
 			EmployeeIDs: staffIDs,

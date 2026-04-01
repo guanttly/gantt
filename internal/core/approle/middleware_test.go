@@ -24,7 +24,7 @@ func TestRequireAnyPermission_AllowsAndInjectsContext(t *testing.T) {
 	}
 
 	jwtMgr := auth.NewJWTManager(auth.JWTConfig{Secret: "test-secret", AccessTokenTTL: time.Hour, RefreshTokenTTL: time.Hour})
-	token, err := jwtMgr.GenerateAccessToken("user-001", dept.ID, dept.Path, string(auth.RoleDeptAdmin))
+	token, err := jwtMgr.GenerateAccessToken("user-001", dept.ID, dept.Path, string(auth.RoleDeptAdmin), auth.PlatformAdmin)
 	if err != nil {
 		t.Fatalf("GenerateAccessToken() error = %v", err)
 	}
@@ -66,7 +66,7 @@ func TestRequireAnyPermission_DeniesWithoutPermission(t *testing.T) {
 	}
 
 	jwtMgr := auth.NewJWTManager(auth.JWTConfig{Secret: "test-secret", AccessTokenTTL: time.Hour, RefreshTokenTTL: time.Hour})
-	token, err := jwtMgr.GenerateAccessToken("user-001", dept.ID, dept.Path, string(auth.RoleEmployee))
+	token, err := jwtMgr.GenerateAccessToken("user-001", dept.ID, dept.Path, string(auth.RoleEmployee), auth.PlatformApp)
 	if err != nil {
 		t.Fatalf("GenerateAccessToken() error = %v", err)
 	}

@@ -12,6 +12,12 @@ var (
 	ErrExpiredToken = errors.New("Token 已过期")
 )
 
+// Platform 常量：区分管理端 / 排班端。
+const (
+	PlatformAdmin = "admin"
+	PlatformApp   = "app"
+)
+
 // Claims JWT 载荷。
 type Claims struct {
 	jwt.RegisteredClaims
@@ -19,6 +25,7 @@ type Claims struct {
 	OrgNodeID   string `json:"nid"`
 	OrgNodePath string `json:"npath"`
 	RoleName    string `json:"role"`
+	Platform    string `json:"plt"`
 }
 
 // JWTConfig JWT 配置。
@@ -53,16 +60,16 @@ func NewJWTManager(cfg JWTConfig) *JWTManager {
 }
 
 // GenerateAccessToken 签发 Access Token。
-func (m *JWTManager) GenerateAccessToken(userID, orgNodeID, orgNodePath, roleName string) (string, error) {
-	return m.generateToken(userID, orgNodeID, orgNodePath, roleName, m.config.AccessTokenTTL)
+func (m *JWTManager) GenerateAccessToken(userID, orgNodeID, orgNodePath, roleName, platform string) (string, error) {
+	return m.generateToken(userID, orgNodeID, orgNodePath, roleName, platform, m.config.AccessTokenTTL)
 }
 
 // GenerateRefreshToken 签发 Refresh Token。
-func (m *JWTManager) GenerateRefreshToken(userID, orgNodeID, orgNodePath, roleName string) (string, error) {
-	return m.generateToken(userID, orgNodeID, orgNodePath, roleName, m.config.RefreshTokenTTL)
+func (m *JWTManager) GenerateRefreshToken(userID, orgNodeID, orgNodePath, roleName, platform string) (string, error) {
+	return m.generateToken(userID, orgNodeID, orgNodePath, roleName, platform, m.config.RefreshTokenTTL)
 }
 
-func (m *JWTManager) generateToken(userID, orgNodeID, orgNodePath, roleName string, ttl time.Duration) (string, error) {
+func (m *JWTManager) generateToken(userID, orgNodeID, orgNodePath, roleName, platform string, ttl time.Duration) (string, error) {
 	now := time.Now()
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -74,6 +81,7 @@ func (m *JWTManager) generateToken(userID, orgNodeID, orgNodePath, roleName stri
 		OrgNodeID:   orgNodeID,
 		OrgNodePath: orgNodePath,
 		RoleName:    roleName,
+		Platform:    platform,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

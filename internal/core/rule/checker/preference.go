@@ -11,13 +11,10 @@ import (
 type PreferenceScorer struct{}
 
 // Score 计算偏好得分。
-func (s *PreferenceScorer) Score(rules []rule.Rule, employeeID string, shiftID string, date time.Time) int {
+func (s *PreferenceScorer) Score(rules []rule.Rule, employeeID string, employeeGroupIDs map[string]bool, shiftID string, date time.Time) int {
 	score := 0
-	for _, r := range rules {
+	for _, r := range rule.ActiveRulesForShiftContext(rules, employeeID, employeeGroupIDs, shiftID) {
 		if r.Category != rule.CategoryPreference {
-			continue
-		}
-		if !r.IsEnabled {
 			continue
 		}
 		var cfg rule.PreferEmployeeConfig

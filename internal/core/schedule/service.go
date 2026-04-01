@@ -236,14 +236,15 @@ func (s *Service) Generate(ctx context.Context, id string) (*GenerateResult, err
 
 	if sch.PipelineType == PipelineAIAssisted && s.aiProvider != nil {
 		p = pipeline.NewAIAssistedPipeline(&pipeline.AIAssistedDeps{
-			RuleService:  s.ruleService,
-			ShiftService: s.shiftService,
-			EmployeeRepo: s.employeeRepo,
-			LeaveRepo:    s.leaveRepo,
-			DraftSaver:   s.repo,
-			AIProvider:   s.aiProvider,
-			Broadcaster:  s.broadcaster,
-			Logger:       s.logger,
+			RuleService:         s.ruleService,
+			ShiftService:        s.shiftService,
+			EmployeeRepo:        s.employeeRepo,
+			LeaveRepo:           s.leaveRepo,
+			GroupMemberProvider: s.groupMemberProvider,
+			DraftSaver:          s.repo,
+			AIProvider:          s.aiProvider,
+			Broadcaster:         s.broadcaster,
+			Logger:              s.logger,
 		})
 	} else {
 		p = pipeline.NewDeterministicPipeline(&pipeline.DeterministicDeps{

@@ -18,6 +18,11 @@ func (s *Service) ComputeEffectiveRules(ctx context.Context, nodeID string) (*Ef
 	if err != nil {
 		return nil, fmt.Errorf("查询规则列表失败: %w", err)
 	}
+	for index := range rules {
+		if err := s.hydrateRule(ctx, &rules[index]); err != nil {
+			return nil, err
+		}
+	}
 
 	sourceMap := make(map[string]string, len(rules))
 	for _, r := range rules {

@@ -14,14 +14,15 @@ import (
 
 // AIAssistedDeps AI 辅助排班 Pipeline 的依赖。
 type AIAssistedDeps struct {
-	RuleService  *rule.Service
-	ShiftService *shift.Service
-	EmployeeRepo *employee.Repository
-	LeaveRepo    *leave.Repository
-	DraftSaver   step.DraftSaver
-	AIProvider   ai.Provider
-	Broadcaster  websocket.Broadcaster // 可选
-	Logger       *zap.Logger
+	RuleService         *rule.Service
+	ShiftService        *shift.Service
+	EmployeeRepo        *employee.Repository
+	LeaveRepo           *leave.Repository
+	GroupMemberProvider step.GroupMemberProvider
+	DraftSaver          step.DraftSaver
+	AIProvider          ai.Provider
+	Broadcaster         websocket.Broadcaster // 可选
+	Logger              *zap.Logger
 }
 
 // NewAIAssistedPipeline 创建 AI 辅助排班 Pipeline。
@@ -33,8 +34,9 @@ func NewAIAssistedPipeline(deps *AIAssistedDeps) *Pipeline {
 			ShiftService: deps.ShiftService,
 		},
 		&step.FilterCandidatesStep{
-			EmployeeRepo: deps.EmployeeRepo,
-			LeaveRepo:    deps.LeaveRepo,
+			EmployeeRepo:        deps.EmployeeRepo,
+			LeaveRepo:           deps.LeaveRepo,
+			GroupMemberProvider: deps.GroupMemberProvider,
 		},
 		&step.PhaseZeroStep{FixedAssignmentProvider: deps.ShiftService},
 		&step.PhaseOneStep{},

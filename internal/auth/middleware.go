@@ -77,6 +77,27 @@ func RequirePermission(permission string) func(next http.Handler) http.Handler {
 	}
 }
 
+// RequirePlatform 平台标识检查中间件。
+// 校验 JWT Claims 中的 Platform 字段是否为指定平台（admin / app）。
+func RequirePlatform(platform string) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims := GetClaims(r.Context())
+			if claims == nil {
+				response.Unauthorized(w, "未认证")
+				return
+			}
+
+			if claims.Platform != platform {
+				response.Forbidden(w, "平台不匹配")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // GetClaims 从 Context 中获取 JWT Claims。
 func GetClaims(ctx context.Context) *Claims {
 	claims, _ := ctx.Value(claimsContextKey{}).(*Claims)

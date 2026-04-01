@@ -91,7 +91,7 @@ export function parseRule(data: ParseRuleRequest) {
 
 /** 批量保存解析后的规则 */
 export function batchSaveRules(data: { parsed_rules: unknown[], dependencies: unknown[], conflicts: unknown[] }) {
-  return client.post('/rules/batch', data).then(r => r.data)
+  return client.post('/app/rules/batch', data).then(r => r.data)
 }
 
 /** 组织规则（排序依赖） */

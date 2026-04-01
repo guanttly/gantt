@@ -13,7 +13,7 @@ func TestJWTManager_GenerateAndParse(t *testing.T) {
 		Issuer:          "test",
 	})
 
-	token, err := mgr.GenerateAccessToken("user-1", "node-1", "/org/node-1", string(RoleScheduler))
+	token, err := mgr.GenerateAccessToken("user-1", "node-1", "/org/node-1", string(RoleScheduler), PlatformAdmin)
 	if err != nil {
 		t.Fatalf("GenerateAccessToken() error = %v", err)
 	}
@@ -53,7 +53,7 @@ func TestJWTManager_WrongSecret(t *testing.T) {
 	mgr1 := NewJWTManager(JWTConfig{Secret: "secret-1", AccessTokenTTL: time.Hour})
 	mgr2 := NewJWTManager(JWTConfig{Secret: "secret-2"})
 
-	token, _ := mgr1.GenerateAccessToken("user-1", "node-1", "/org/node-1", string(RolePlatformAdmin))
+	token, _ := mgr1.GenerateAccessToken("user-1", "node-1", "/org/node-1", string(RolePlatformAdmin), PlatformAdmin)
 	_, err := mgr2.ParseToken(token)
 	if err != ErrInvalidToken {
 		t.Errorf("ParseToken(wrong secret) error = %v, want %v", err, ErrInvalidToken)
@@ -66,7 +66,7 @@ func TestJWTManager_ExpiredToken(t *testing.T) {
 		AccessTokenTTL: -1 * time.Second,
 	})
 
-	token, _ := mgr.GenerateAccessToken("user-1", "node-1", "/org/node-1", string(RolePlatformAdmin))
+	token, _ := mgr.GenerateAccessToken("user-1", "node-1", "/org/node-1", string(RolePlatformAdmin), PlatformAdmin)
 	_, err := mgr.ParseToken(token)
 	if err != ErrExpiredToken {
 		t.Errorf("ParseToken(expired) error = %v, want %v", err, ErrExpiredToken)
@@ -80,7 +80,7 @@ func TestJWTManager_RefreshToken(t *testing.T) {
 		RefreshTokenTTL: 24 * time.Hour,
 	})
 
-	token, err := mgr.GenerateRefreshToken("user-1", "node-1", "/org/node-1", string(RoleScheduler))
+	token, err := mgr.GenerateRefreshToken("user-1", "node-1", "/org/node-1", string(RoleScheduler), PlatformApp)
 	if err != nil {
 		t.Fatalf("GenerateRefreshToken() error = %v", err)
 	}
@@ -110,7 +110,7 @@ func TestJWTManager_DefaultConfig(t *testing.T) {
 
 func TestJWTManager_EmptySecretUsesDefault(t *testing.T) {
 	mgr := NewJWTManager(JWTConfig{Secret: "", AccessTokenTTL: time.Hour})
-	token, err := mgr.GenerateAccessToken("user-1", "node-1", "/org/node-1", string(RolePlatformAdmin))
+	token, err := mgr.GenerateAccessToken("user-1", "node-1", "/org/node-1", string(RolePlatformAdmin), PlatformAdmin)
 	if err != nil {
 		t.Fatalf("GenerateAccessToken() error = %v", err)
 	}

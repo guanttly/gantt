@@ -40,8 +40,9 @@ type ChatResponse struct {
 
 // StreamChunk 流式输出数据块。
 type StreamChunk struct {
-	Content string `json:"content"`
-	Done    bool   `json:"done"`
+	Content   string `json:"content"`
+	Reasoning string `json:"reasoning,omitempty"`
+	Done      bool   `json:"done"`
 }
 
 // TokenUsage Token 消耗统计。

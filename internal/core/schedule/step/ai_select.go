@@ -22,8 +22,13 @@ type AISelectStep struct {
 func (s *AISelectStep) Name() string { return "ai_select" }
 
 func (s *AISelectStep) Execute(ctx context.Context, state *ScheduleState) error {
+	logger := s.Logger
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+
 	if s.Provider == nil {
-		s.Logger.Warn("AI provider 未配置，跳过 AI 选人步骤")
+		logger.Warn("AI provider 未配置，跳过 AI 选人步骤")
 		return nil
 	}
 
@@ -53,7 +58,7 @@ func (s *AISelectStep) Execute(ctx context.Context, state *ScheduleState) error 
 	}
 
 	if len(vacancies) == 0 {
-		s.Logger.Info("没有空缺，跳过 AI 选人步骤")
+		logger.Info("没有空缺，跳过 AI 选人步骤")
 		return nil
 	}
 
@@ -89,7 +94,7 @@ func (s *AISelectStep) Execute(ctx context.Context, state *ScheduleState) error 
 		MaxTokens:   4096,
 	})
 	if err != nil {
-		s.Logger.Error("AI 选人调用失败", zap.Error(err))
+		logger.Error("AI 选人调用失败", zap.Error(err))
 		return nil // 不中断 pipeline，后续 PhaseTwo 会兜底
 	}
 
@@ -127,11 +132,11 @@ func (s *AISelectStep) Execute(ctx context.Context, state *ScheduleState) error 
 
 	if start >= 0 && end > start {
 		if err := json.Unmarshal([]byte(content[start:end]), &aiAssignments); err != nil {
-			s.Logger.Warn("AI 返回内容解析失败", zap.Error(err), zap.String("content", content))
+			logger.Warn("AI 返回内容解析失败", zap.Error(err), zap.String("content", content))
 			return nil
 		}
 	} else {
-		s.Logger.Warn("AI 返回内容中未找到 JSON 数组", zap.String("content", content))
+		logger.Warn("AI 返回内容中未找到 JSON 数组", zap.String("content", content))
 		return nil
 	}
 
@@ -149,51 +154,54 @@ func (s *AISelectStep) Execute(ctx context.Context, state *ScheduleState) error 
 	// 验证 AI 分配并添加到 state
 	accepted := 0
 	for _, aa := range aiAssignments {
-		d, _ := time.Parse("2006-01-02", aa.Date)
-		checkCtx := &checker.CheckContext{
-			EmployeeID:  aa.EmployeeID,
-			ShiftID:     aa.ShiftID,
-			Date:        d,
-			Assignments: checkerAssignments,
+		key := aa.ShiftID + "|" + aa.Date
+		if !containsCandidate(state.Candidates[key], aa.EmployeeID) {
+			continue
+		}
+		if state.IsOccupied(aa.EmployeeID, aa.Date) {
+			continue
+		}
+		if needed := requiredCount(state, aa.ShiftID, aa.Date); needed > 0 && state.CountAssigned(aa.ShiftID, aa.Date) >= needed {
+			continue
 		}
 
-		results := checker.ValidateAll(ctx, state.EffectiveRules, checkCtx)
-		hasViolation := false
-		for _, r := range results {
-			if !r.Pass {
-				hasViolation = true
-				state.Violations = append(state.Violations, Violation{
-					EmployeeID: aa.EmployeeID,
-					ShiftID:    aa.ShiftID,
-					Date:       aa.Date,
-					RuleID:     r.RuleID,
-					RuleName:   r.RuleName,
-					Reason:     r.Reason,
-				})
-			}
+		linkedPlans, ok := planRequiredTogetherAssignments(state, aa.EmployeeID, aa.ShiftID, aa.Date)
+		if !ok {
+			continue
 		}
 
-		if !hasViolation {
-			newAssignment := Assignment{
+		plannedAssignments := make([]Assignment, 0, len(linkedPlans)+1)
+		for _, linkedPlan := range linkedPlans {
+			plannedAssignments = append(plannedAssignments, Assignment{
 				ID:         uuid.New().String(),
 				ScheduleID: state.ScheduleID,
 				EmployeeID: aa.EmployeeID,
-				ShiftID:    aa.ShiftID,
-				Date:       aa.Date,
-				Source:     SourceAI,
-			}
-			state.Assignments = append(state.Assignments, newAssignment)
-			// 更新 checker assignments
-			checkerAssignments = append(checkerAssignments, checker.Assignment{
-				EmployeeID: aa.EmployeeID,
-				ShiftID:    aa.ShiftID,
-				Date:       d,
+				ShiftID:    linkedPlan.ShiftID,
+				Date:       linkedPlan.Date,
+				Source:     SourceRule,
 			})
-			accepted++
 		}
+		plannedAssignments = append(plannedAssignments, Assignment{
+			ID:         uuid.New().String(),
+			ScheduleID: state.ScheduleID,
+			EmployeeID: aa.EmployeeID,
+			ShiftID:    aa.ShiftID,
+			Date:       aa.Date,
+			Source:     SourceAI,
+		})
+
+		nextAssignments, violations := validatePlannedAssignments(ctx, state, checkerAssignments, plannedAssignments)
+		if len(violations) > 0 {
+			state.Violations = append(state.Violations, violations...)
+			continue
+		}
+
+		state.Assignments = append(state.Assignments, plannedAssignments...)
+		checkerAssignments = nextAssignments
+		accepted++
 	}
 
-	s.Logger.Info("AI 选人完成",
+	logger.Info("AI 选人完成",
 		zap.Int("ai_suggested", len(aiAssignments)),
 		zap.Int("accepted", accepted),
 		zap.Int("rejected", len(aiAssignments)-accepted),

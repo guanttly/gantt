@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"gantt-saas/internal/core/rule"
 	"gantt-saas/internal/core/shift"
 )
 
@@ -98,6 +99,355 @@ func TestPhaseTwoStep_SkipsAlreadySatisfied(t *testing.T) {
 
 	if got := len(state.Assignments); got != 1 {
 		t.Errorf("expected 1 assignment (unchanged), got %d", got)
+	}
+}
+
+func TestPhaseOneStep_KeepsRequiredTogetherCandidatesWhenDependencyCanBeBackfilled(t *testing.T) {
+	config := &ScheduleConfig{
+		ShiftIDs: []string{"day", "night"},
+		Requirements: map[string]map[string]int{
+			"day":   {"2026-03-22": 1},
+			"night": {"2026-03-23": 1},
+		},
+	}
+	state := NewScheduleState("s1", "org", "", "2026-03-22", "2026-03-23", "u", config)
+	state.ShiftOrder = makeShifts("night")
+	state.Candidates["day|2026-03-22"] = []string{"e1"}
+	state.Candidates["night|2026-03-23"] = []string{"e1", "e2"}
+	minusOne := -1
+	state.EffectiveRules = []rule.Rule{{
+		IsEnabled:      true,
+		Category:       rule.CategoryConstraint,
+		SubType:        rule.SubTypeMust,
+		TimeOffsetDays: &minusOne,
+		Associations: []rule.RuleAssociation{
+			{TargetType: rule.TargetTypeShift, TargetID: "night", Role: rule.AssociationRoleSubject},
+			{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleObject},
+		},
+	}}
+
+	if err := (&PhaseOneStep{}).Execute(context.Background(), state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := state.Candidates["night|2026-03-23"]
+	if len(got) != 1 || got[0] != "e1" {
+		t.Fatalf("expected only plannable candidate e1, got %v", got)
+	}
+}
+
+func TestPhaseTwoStep_BackfillsRequiredTogetherDependency(t *testing.T) {
+	config := &ScheduleConfig{
+		ShiftIDs: []string{"day", "night"},
+		Requirements: map[string]map[string]int{
+			"day":   {"2026-03-22": 1},
+			"night": {"2026-03-23": 1},
+		},
+	}
+	state := NewScheduleState("s1", "org", "", "2026-03-22", "2026-03-23", "u", config)
+	state.ShiftOrder = makeShifts("night")
+	state.Candidates["day|2026-03-22"] = []string{"e1"}
+	state.Candidates["night|2026-03-23"] = []string{"e1", "e2"}
+	minusOne := -1
+	state.EffectiveRules = []rule.Rule{{
+		ID:             "r-must",
+		IsEnabled:      true,
+		Category:       rule.CategoryConstraint,
+		SubType:        rule.SubTypeMust,
+		TimeOffsetDays: &minusOne,
+		Associations: []rule.RuleAssociation{
+			{TargetType: rule.TargetTypeShift, TargetID: "night", Role: rule.AssociationRoleSubject},
+			{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleObject},
+		},
+	}}
+
+	if err := (&PhaseTwoStep{}).Execute(context.Background(), state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := len(state.Assignments); got != 2 {
+		t.Fatalf("expected linked fill to create 2 assignments, got %d", got)
+	}
+
+	var hasRequired bool
+	var hasTarget bool
+	for _, assignment := range state.Assignments {
+		if assignment.EmployeeID != "e1" {
+			continue
+		}
+		if assignment.ShiftID == "day" && assignment.Date == "2026-03-22" {
+			hasRequired = assignment.Source == SourceRule
+		}
+		if assignment.ShiftID == "night" && assignment.Date == "2026-03-23" {
+			hasTarget = assignment.Source == SourceFill
+		}
+	}
+	if !hasRequired {
+		t.Fatalf("expected linked required assignment on day shift")
+	}
+	if !hasTarget {
+		t.Fatalf("expected fill assignment on target night shift")
+	}
+}
+
+func TestPhaseOneStep_KeepsRequiredTogetherCandidatesWhenDependencyChainCanBeBackfilled(t *testing.T) {
+	config := &ScheduleConfig{
+		ShiftIDs: []string{"prep", "day", "night"},
+		Requirements: map[string]map[string]int{
+			"prep":  {"2026-03-21": 1},
+			"day":   {"2026-03-22": 1},
+			"night": {"2026-03-23": 1},
+		},
+	}
+	state := NewScheduleState("s1", "org", "", "2026-03-21", "2026-03-23", "u", config)
+	state.ShiftOrder = makeShifts("night")
+	state.Candidates["prep|2026-03-21"] = []string{"e1"}
+	state.Candidates["day|2026-03-22"] = []string{"e1"}
+	state.Candidates["night|2026-03-23"] = []string{"e1", "e2"}
+	minusOne := -1
+	state.EffectiveRules = []rule.Rule{
+		{
+			ID:             "r-night-day",
+			IsEnabled:      true,
+			Category:       rule.CategoryConstraint,
+			SubType:        rule.SubTypeMust,
+			TimeOffsetDays: &minusOne,
+			Associations: []rule.RuleAssociation{
+				{TargetType: rule.TargetTypeShift, TargetID: "night", Role: rule.AssociationRoleSubject},
+				{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleObject},
+			},
+		},
+		{
+			ID:             "r-day-prep",
+			IsEnabled:      true,
+			Category:       rule.CategoryConstraint,
+			SubType:        rule.SubTypeMust,
+			TimeOffsetDays: &minusOne,
+			Associations: []rule.RuleAssociation{
+				{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleSubject},
+				{TargetType: rule.TargetTypeShift, TargetID: "prep", Role: rule.AssociationRoleObject},
+			},
+		},
+	}
+
+	if err := (&PhaseOneStep{}).Execute(context.Background(), state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := state.Candidates["night|2026-03-23"]
+	if len(got) != 1 || got[0] != "e1" {
+		t.Fatalf("expected only chain-plannable candidate e1, got %v", got)
+	}
+}
+
+func TestPhaseTwoStep_BackfillsRequiredTogetherDependencyChain(t *testing.T) {
+	config := &ScheduleConfig{
+		ShiftIDs: []string{"prep", "day", "night"},
+		Requirements: map[string]map[string]int{
+			"prep":  {"2026-03-21": 1},
+			"day":   {"2026-03-22": 1},
+			"night": {"2026-03-23": 1},
+		},
+	}
+	state := NewScheduleState("s1", "org", "", "2026-03-21", "2026-03-23", "u", config)
+	state.ShiftOrder = makeShifts("night")
+	state.Candidates["prep|2026-03-21"] = []string{"e1"}
+	state.Candidates["day|2026-03-22"] = []string{"e1"}
+	state.Candidates["night|2026-03-23"] = []string{"e1", "e2"}
+	minusOne := -1
+	state.EffectiveRules = []rule.Rule{
+		{
+			ID:             "r-night-day",
+			IsEnabled:      true,
+			Category:       rule.CategoryConstraint,
+			SubType:        rule.SubTypeMust,
+			TimeOffsetDays: &minusOne,
+			Associations: []rule.RuleAssociation{
+				{TargetType: rule.TargetTypeShift, TargetID: "night", Role: rule.AssociationRoleSubject},
+				{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleObject},
+			},
+		},
+		{
+			ID:             "r-day-prep",
+			IsEnabled:      true,
+			Category:       rule.CategoryConstraint,
+			SubType:        rule.SubTypeMust,
+			TimeOffsetDays: &minusOne,
+			Associations: []rule.RuleAssociation{
+				{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleSubject},
+				{TargetType: rule.TargetTypeShift, TargetID: "prep", Role: rule.AssociationRoleObject},
+			},
+		},
+	}
+
+	if err := (&PhaseTwoStep{}).Execute(context.Background(), state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := len(state.Assignments); got != 3 {
+		t.Fatalf("expected chained fill to create 3 assignments, got %d", got)
+	}
+
+	expected := map[string]string{
+		"prep|2026-03-21":  SourceRule,
+		"day|2026-03-22":   SourceRule,
+		"night|2026-03-23": SourceFill,
+	}
+	for _, assignment := range state.Assignments {
+		if assignment.EmployeeID != "e1" {
+			continue
+		}
+		key := assignment.ShiftID + "|" + assignment.Date
+		wantSource, ok := expected[key]
+		if !ok {
+			t.Fatalf("unexpected chained assignment %s", key)
+		}
+		if assignment.Source != wantSource {
+			t.Fatalf("expected %s source %q, got %q", key, wantSource, assignment.Source)
+		}
+		delete(expected, key)
+	}
+	if len(expected) != 0 {
+		t.Fatalf("missing chained assignments: %v", expected)
+	}
+}
+
+func TestPhaseTwoStep_SkipsLinkedPlanThatViolatesOtherRules(t *testing.T) {
+	config := &ScheduleConfig{
+		ShiftIDs: []string{"prep", "day", "night"},
+		Requirements: map[string]map[string]int{
+			"day":   {"2026-03-22": 1},
+			"night": {"2026-03-23": 1},
+		},
+	}
+	state := NewScheduleState("s1", "org", "", "2026-03-21", "2026-03-23", "u", config)
+	state.ShiftOrder = makeShifts("night")
+	state.Candidates["day|2026-03-22"] = []string{"e1", "e2"}
+	state.Candidates["night|2026-03-23"] = []string{"e1", "e2"}
+	state.Assignments = []Assignment{{
+		ID:         "a-prep",
+		EmployeeID: "e2",
+		ShiftID:    "prep",
+		Date:       "2026-03-21",
+		Source:     SourceRule,
+	}}
+	minusOne := -1
+	state.EffectiveRules = []rule.Rule{
+		{
+			ID:             "r-must",
+			Category:       rule.CategoryConstraint,
+			SubType:        rule.SubTypeMust,
+			IsEnabled:      true,
+			TimeOffsetDays: &minusOne,
+			Associations: []rule.RuleAssociation{
+				{TargetType: rule.TargetTypeShift, TargetID: "night", Role: rule.AssociationRoleSubject},
+				{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleObject},
+			},
+		},
+		{
+			ID:             "r-source",
+			Category:       rule.CategoryDependency,
+			SubType:        rule.SubTypeSource,
+			IsEnabled:      true,
+			TimeOffsetDays: &minusOne,
+			Associations: []rule.RuleAssociation{
+				{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleSubject},
+				{TargetType: rule.TargetTypeShift, TargetID: "prep", Role: rule.AssociationRoleObject},
+			},
+		},
+	}
+
+	if err := (&PhaseTwoStep{}).Execute(context.Background(), state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := len(state.Assignments); got != 3 {
+		t.Fatalf("expected existing prep plus valid linked pair, got %d assignments", got)
+	}
+
+	expected := map[string]string{
+		"prep|2026-03-21":  "e2",
+		"day|2026-03-22":   "e2",
+		"night|2026-03-23": "e2",
+	}
+	for _, assignment := range state.Assignments {
+		key := assignment.ShiftID + "|" + assignment.Date
+		wantEmployee, ok := expected[key]
+		if !ok {
+			t.Fatalf("unexpected assignment %s for %s", key, assignment.EmployeeID)
+		}
+		if assignment.EmployeeID != wantEmployee {
+			t.Fatalf("expected %s assigned to %s, got %s", key, wantEmployee, assignment.EmployeeID)
+		}
+	}
+	if len(state.Violations) != 0 {
+		t.Fatalf("expected no violations recorded during phase two candidate skipping, got %d", len(state.Violations))
+	}
+}
+
+func TestPhaseTwoStep_BackfillsRequiredTogetherCycleToTarget(t *testing.T) {
+	config := &ScheduleConfig{
+		ShiftIDs: []string{"day", "night"},
+		Requirements: map[string]map[string]int{
+			"day":   {"2026-03-22": 1},
+			"night": {"2026-03-23": 1},
+		},
+	}
+	state := NewScheduleState("s1", "org", "", "2026-03-22", "2026-03-23", "u", config)
+	state.ShiftOrder = makeShifts("night")
+	state.Candidates["day|2026-03-22"] = []string{"e1"}
+	state.Candidates["night|2026-03-23"] = []string{"e1"}
+	minusOne := -1
+	plusOne := 1
+	state.EffectiveRules = []rule.Rule{
+		{
+			ID:             "r-night-day",
+			Category:       rule.CategoryConstraint,
+			SubType:        rule.SubTypeMust,
+			IsEnabled:      true,
+			TimeOffsetDays: &minusOne,
+			Associations: []rule.RuleAssociation{
+				{TargetType: rule.TargetTypeShift, TargetID: "night", Role: rule.AssociationRoleSubject},
+				{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleObject},
+			},
+		},
+		{
+			ID:             "r-day-night",
+			Category:       rule.CategoryConstraint,
+			SubType:        rule.SubTypeMust,
+			IsEnabled:      true,
+			TimeOffsetDays: &plusOne,
+			Associations: []rule.RuleAssociation{
+				{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleSubject},
+				{TargetType: rule.TargetTypeShift, TargetID: "night", Role: rule.AssociationRoleObject},
+			},
+		},
+	}
+
+	if err := (&PhaseTwoStep{}).Execute(context.Background(), state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := len(state.Assignments); got != 2 {
+		t.Fatalf("expected cyclic linked fill to create 2 assignments, got %d", got)
+	}
+
+	expected := map[string]string{
+		"day|2026-03-22":   SourceRule,
+		"night|2026-03-23": SourceFill,
+	}
+	for _, assignment := range state.Assignments {
+		key := assignment.ShiftID + "|" + assignment.Date
+		wantSource, ok := expected[key]
+		if !ok {
+			t.Fatalf("unexpected assignment %s", key)
+		}
+		if assignment.EmployeeID != "e1" {
+			t.Fatalf("expected %s assigned to e1, got %s", key, assignment.EmployeeID)
+		}
+		if assignment.Source != wantSource {
+			t.Fatalf("expected %s source %q, got %q", key, wantSource, assignment.Source)
+		}
 	}
 }
 

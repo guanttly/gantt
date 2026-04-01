@@ -12,65 +12,66 @@ import (
 
 	"gantt-saas/internal/infra/config"
 
+	openai "github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
 	"go.uber.org/zap"
 )
 
-// BailianProvider 实现阿里百炼（DashScope）的 Provider。
+// BailianProvider 实现阿里百炼（DashScope）的 Provider，使用 OpenAI 兼容模式。
 type BailianProvider struct {
-	client  *http.Client
-	apiKey  string
-	baseURL string
-	model   string
-	logger  *zap.Logger
+	client     *openai.Client
+	httpClient *http.Client
+	apiKey     string
+	baseURL    string
+	model      string
+	logger     *zap.Logger
 }
+
+const defaultBailianBaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 // NewBailianProvider 创建百炼 Provider。
 func NewBailianProvider(cfg *config.AIProviderConfig, logger *zap.Logger) (*BailianProvider, error) {
 	if cfg.APIKey == "" {
 		return nil, fmt.Errorf("bailian: api_key is required")
 	}
-	baseURL := cfg.BaseURL
-	if baseURL == "" {
-		baseURL = "https://dashscope.aliyuncs.com"
-	}
+
+	baseURL := normalizeBailianURL(cfg.BaseURL)
+
+	client := openai.NewClient(
+		option.WithAPIKey(cfg.APIKey),
+		option.WithBaseURL(baseURL),
+	)
 
 	return &BailianProvider{
-		client:  &http.Client{},
-		apiKey:  cfg.APIKey,
-		baseURL: strings.TrimRight(baseURL, "/"),
-		model:   cfg.Model,
-		logger:  logger.Named("bailian"),
+		client:     &client,
+		httpClient: &http.Client{},
+		apiKey:     cfg.APIKey,
+		baseURL:    baseURL,
+		model:      cfg.Model,
+		logger:     logger.Named("bailian"),
 	}, nil
 }
 
+// normalizeBailianURL 将各种形式的 DashScope URL 统一为 OpenAI 兼容端点。
+func normalizeBailianURL(raw string) string {
+	if raw == "" {
+		return defaultBailianBaseURL
+	}
+	u := strings.TrimRight(raw, "/")
+	// 去掉旧版 native API 路径
+	u = strings.TrimSuffix(u, "/api/v1/services/aigc/text-generation/generation")
+	u = strings.TrimSuffix(u, "/api/v1")
+	u = strings.TrimSuffix(u, "/v1")
+	u = strings.TrimRight(u, "/")
+	// 如果已经是 compatible-mode 路径则直接返回
+	if strings.HasSuffix(u, "/compatible-mode/v1") {
+		return u
+	}
+	u = strings.TrimSuffix(u, "/compatible-mode")
+	return u + "/compatible-mode/v1"
+}
+
 func (p *BailianProvider) Name() string { return "bailian" }
-
-type dashscopeRequest struct {
-	Model string `json:"model"`
-	Input struct {
-		Messages []Message `json:"messages"`
-	} `json:"input"`
-	Parameters struct {
-		ResultFormat string `json:"result_format"`
-	} `json:"parameters"`
-}
-
-type dashscopeResponse struct {
-	Output struct {
-		Choices []struct {
-			FinishReason string `json:"finish_reason"`
-			Message      struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	} `json:"output"`
-	Usage struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
-		TotalTokens  int `json:"total_tokens"`
-	} `json:"usage"`
-}
 
 func (p *BailianProvider) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
 	model := req.Model
@@ -78,68 +79,45 @@ func (p *BailianProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		model = p.model
 	}
 
-	dsReq := dashscopeRequest{Model: model}
-	dsReq.Input.Messages = req.Messages
-	dsReq.Parameters.ResultFormat = "message"
+	messages := make([]openai.ChatCompletionMessageParamUnion, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		switch m.Role {
+		case "system":
+			messages = append(messages, openai.SystemMessage(m.Content))
+		case "user":
+			messages = append(messages, openai.UserMessage(m.Content))
+		case "assistant":
+			messages = append(messages, openai.AssistantMessage(m.Content))
+		}
+	}
 
-	bodyBytes, err := json.Marshal(dsReq)
+	params := openai.ChatCompletionNewParams{
+		Messages: messages,
+		Model:    model,
+	}
+
+	if req.Temperature > 0 {
+		params.Temperature = openai.Float(req.Temperature)
+	}
+
+	resp, err := p.client.Chat.Completions.New(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("bailian: marshal request failed: %w", err)
+		return nil, fmt.Errorf("bailian chat failed: %w", err)
 	}
 
-	url := p.baseURL + "/api/v1/services/aigc/text-generation/generation"
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(bodyBytes))
-	if err != nil {
-		return nil, err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("bailian: request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("bailian: read response failed: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("bailian: HTTP %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var dsResp dashscopeResponse
-	if err := json.Unmarshal(respBody, &dsResp); err != nil {
-		return nil, fmt.Errorf("bailian: unmarshal failed: %w", err)
-	}
-
-	if len(dsResp.Output.Choices) == 0 {
+	if len(resp.Choices) == 0 {
 		return nil, fmt.Errorf("bailian: empty response")
 	}
 
 	return &ChatResponse{
-		Content:      dsResp.Output.Choices[0].Message.Content,
-		FinishReason: dsResp.Output.Choices[0].FinishReason,
+		Content:      resp.Choices[0].Message.Content,
+		FinishReason: string(resp.Choices[0].FinishReason),
 		Usage: TokenUsage{
-			PromptTokens:     dsResp.Usage.InputTokens,
-			CompletionTokens: dsResp.Usage.OutputTokens,
-			TotalTokens:      dsResp.Usage.TotalTokens,
+			PromptTokens:     int(resp.Usage.PromptTokens),
+			CompletionTokens: int(resp.Usage.CompletionTokens),
+			TotalTokens:      int(resp.Usage.TotalTokens),
 		},
 	}, nil
-}
-
-type dashscopeStreamResponse struct {
-	Output struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-				Role    string `json:"role"`
-			} `json:"message"`
-			FinishReason *string `json:"finish_reason"`
-		} `json:"choices"`
-	} `json:"output"`
 }
 
 func (p *BailianProvider) ChatStream(ctx context.Context, req ChatRequest) (<-chan StreamChunk, error) {
@@ -148,44 +126,53 @@ func (p *BailianProvider) ChatStream(ctx context.Context, req ChatRequest) (<-ch
 		model = p.model
 	}
 
-	type streamReq struct {
-		Model  string `json:"model"`
-		Stream bool   `json:"stream"`
-		Input  struct {
-			Messages []Message `json:"messages"`
-		} `json:"input"`
-		Parameters struct {
-			ResultFormat      string `json:"result_format"`
-			IncrementalOutput bool   `json:"incremental_output"`
-		} `json:"parameters"`
+	type chatMsg struct {
+		Role    string `json:"role"`
+		Content string `json:"content"`
+	}
+	type streamReqBody struct {
+		Model         string    `json:"model"`
+		Messages      []chatMsg `json:"messages"`
+		Stream        bool      `json:"stream"`
+		Temperature   float64   `json:"temperature,omitempty"`
+		StreamOptions *struct {
+			IncludeUsage bool `json:"include_usage"`
+		} `json:"stream_options,omitempty"`
 	}
 
-	sr := streamReq{Model: model, Stream: true}
-	sr.Input.Messages = req.Messages
-	sr.Parameters.ResultFormat = "message"
-	sr.Parameters.IncrementalOutput = true
+	msgs := make([]chatMsg, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		msgs = append(msgs, chatMsg{Role: m.Role, Content: m.Content})
+	}
 
-	bodyBytes, err := json.Marshal(sr)
+	body := streamReqBody{
+		Model:    model,
+		Messages: msgs,
+		Stream:   true,
+	}
+	if req.Temperature > 0 {
+		body.Temperature = req.Temperature
+	}
+
+	bodyBytes, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("bailian: marshal stream request failed: %w", err)
 	}
 
-	url := p.baseURL + "/api/v1/services/aigc/text-generation/generation"
+	url := strings.TrimRight(p.baseURL, "/") + "/chat/completions"
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	httpReq.Header.Set("Accept", "text/event-stream")
-	httpReq.Header.Set("X-DashScope-SSE", "enable")
 
 	ch := make(chan StreamChunk, 10)
 
 	go func() {
 		defer close(ch)
 
-		resp, err := p.client.Do(httpReq)
+		resp, err := p.httpClient.Do(httpReq)
 		if err != nil {
 			p.logger.Error("bailian stream request failed", zap.Error(err))
 			return
@@ -194,8 +181,23 @@ func (p *BailianProvider) ChatStream(ctx context.Context, req ChatRequest) (<-ch
 
 		if resp.StatusCode != http.StatusOK {
 			respBody, _ := io.ReadAll(resp.Body)
-			p.logger.Error("bailian stream HTTP error", zap.Int("status", resp.StatusCode), zap.String("body", string(respBody)))
+			p.logger.Error("bailian stream HTTP error",
+				zap.Int("status", resp.StatusCode),
+				zap.String("body", string(respBody)))
 			return
+		}
+
+		// DashScope SSE 格式: data: {...}\n\n
+		type deltaObj struct {
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
+		}
+		type choiceObj struct {
+			Delta        deltaObj `json:"delta"`
+			FinishReason *string  `json:"finish_reason"`
+		}
+		type ssePayload struct {
+			Choices []choiceObj `json:"choices"`
 		}
 
 		scanner := bufio.NewScanner(resp.Body)
@@ -209,19 +211,30 @@ func (p *BailianProvider) ChatStream(ctx context.Context, req ChatRequest) (<-ch
 				break
 			}
 
-			var streamResp dashscopeStreamResponse
-			if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
+			var payload ssePayload
+			if err := json.Unmarshal([]byte(data), &payload); err != nil {
 				continue
 			}
 
-			if len(streamResp.Output.Choices) == 0 {
+			if len(payload.Choices) == 0 {
 				continue
 			}
 
-			choice := streamResp.Output.Choices[0]
-			if choice.Message.Content != "" {
+			choice := payload.Choices[0]
+
+			// 发送 reasoning_content（Qwen 思考过程）
+			if choice.Delta.ReasoningContent != "" {
 				select {
-				case ch <- StreamChunk{Content: choice.Message.Content}:
+				case ch <- StreamChunk{Reasoning: choice.Delta.ReasoningContent}:
+				case <-ctx.Done():
+					return
+				}
+			}
+
+			// 发送 content（最终输出）
+			if choice.Delta.Content != "" {
+				select {
+				case ch <- StreamChunk{Content: choice.Delta.Content}:
 				case <-ctx.Done():
 					return
 				}

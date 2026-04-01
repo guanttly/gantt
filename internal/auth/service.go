@@ -569,12 +569,12 @@ func (s *Service) buildLoginResponse(ctx context.Context, user *User, orgNodeID 
 	}
 
 	// 签发 Token
-	accessToken, err := s.jwt.GenerateAccessToken(user.ID, orgNodeID, node.Path, roleName)
+	accessToken, err := s.jwt.GenerateAccessToken(user.ID, orgNodeID, node.Path, roleName, PlatformAdmin)
 	if err != nil {
 		return nil, fmt.Errorf("签发 Access Token 失败: %w", err)
 	}
 
-	refreshToken, err := s.jwt.GenerateRefreshToken(user.ID, orgNodeID, node.Path, roleName)
+	refreshToken, err := s.jwt.GenerateRefreshToken(user.ID, orgNodeID, node.Path, roleName, PlatformAdmin)
 	if err != nil {
 		return nil, fmt.Errorf("签发 Refresh Token 失败: %w", err)
 	}

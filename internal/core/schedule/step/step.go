@@ -27,9 +27,10 @@ type ScheduleState struct {
 	EffectiveRules []rule.Rule
 
 	// ── 中间状态 ──
-	ShiftOrder []shift.Shift             // 拓扑排序后的班次执行顺序
-	Candidates map[string][]string       // "shiftID|date" → 候选员工 ID 列表
-	Scores     map[string]map[string]int // "shiftID|date" → employeeID → 偏好评分
+	ShiftOrder       []shift.Shift              // 拓扑排序后的班次执行顺序
+	Candidates       map[string][]string        // "shiftID|date" → 候选员工 ID 列表
+	Scores           map[string]map[string]int  // "shiftID|date" → employeeID → 偏好评分
+	EmployeeGroupIDs map[string]map[string]bool // employeeID -> groupID set
 
 	// ── 编辑输入（调整 Pipeline 使用）──
 	EditInput *EditInput
@@ -45,17 +46,18 @@ type ScheduleState struct {
 // NewScheduleState 创建排班管道状态。
 func NewScheduleState(scheduleID, orgNodeID, groupID, startDate, endDate, createdBy string, config *ScheduleConfig) *ScheduleState {
 	return &ScheduleState{
-		ScheduleID:  scheduleID,
-		OrgNodeID:   orgNodeID,
-		GroupID:     groupID,
-		StartDate:   startDate,
-		EndDate:     endDate,
-		CreatedBy:   createdBy,
-		Config:      config,
-		Candidates:  make(map[string][]string),
-		Scores:      make(map[string]map[string]int),
-		Assignments: make([]Assignment, 0),
-		Violations:  make([]Violation, 0),
+		ScheduleID:       scheduleID,
+		OrgNodeID:        orgNodeID,
+		GroupID:          groupID,
+		StartDate:        startDate,
+		EndDate:          endDate,
+		CreatedBy:        createdBy,
+		Config:           config,
+		Candidates:       make(map[string][]string),
+		Scores:           make(map[string]map[string]int),
+		EmployeeGroupIDs: make(map[string]map[string]bool),
+		Assignments:      make([]Assignment, 0),
+		Violations:       make([]Violation, 0),
 	}
 }
 

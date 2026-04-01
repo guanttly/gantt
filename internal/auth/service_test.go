@@ -447,7 +447,7 @@ func TestService_Login_TokenValid(t *testing.T) {
 		Secret:         "test-secret-for-integration",
 		AccessTokenTTL: -1 * time.Second,
 	})
-	expiredToken, _ := expiredMgr.GenerateAccessToken("user-1", "node-1", "/path", string(RolePlatformAdmin))
+	expiredToken, _ := expiredMgr.GenerateAccessToken("user-1", "node-1", "/path", string(RolePlatformAdmin), PlatformAdmin)
 	_, err = jwtMgr.ParseToken(expiredToken)
 	if err != ErrExpiredToken {
 		t.Errorf("过期 Token error = %v, want %v", err, ErrExpiredToken)

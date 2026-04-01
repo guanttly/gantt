@@ -101,6 +101,9 @@ export interface RuleApplyScopeInput {
 
 export interface UpdateRuleRequest {
   name?: string
+  apply_scope?: RuleApplyScope
+  time_scope?: RuleTimeScope
+  time_offset_days?: number
   category?: RuleCategory
   sub_category?: RuleSubCategory
   priority?: number

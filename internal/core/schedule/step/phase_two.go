@@ -20,6 +20,15 @@ func (s *PhaseTwoStep) Name() string { return "PhaseTwo" }
 // Execute 执行兜底填充。
 func (s *PhaseTwoStep) Execute(ctx context.Context, state *ScheduleState) error {
 	scorer := &checker.PreferenceScorer{}
+	checkerAssignments := make([]checker.Assignment, 0, len(state.Assignments))
+	for _, assignment := range state.Assignments {
+		date, _ := time.Parse("2006-01-02", assignment.Date)
+		checkerAssignments = append(checkerAssignments, checker.Assignment{
+			EmployeeID: assignment.EmployeeID,
+			ShiftID:    assignment.ShiftID,
+			Date:       date,
+		})
+	}
 
 	for _, sh := range state.ShiftOrder {
 		dates := state.Config.Requirements[sh.ID]
@@ -54,7 +63,7 @@ func (s *PhaseTwoStep) Execute(ctx context.Context, state *ScheduleState) error 
 			}
 			scored := make([]scoredCandidate, 0, len(available))
 			for _, empID := range available {
-				sc := scorer.Score(state.EffectiveRules, empID, sh.ID, date)
+				sc := scorer.Score(state.EffectiveRules, empID, state.EmployeeGroupIDs[empID], sh.ID, date)
 				scored = append(scored, scoredCandidate{EmployeeID: empID, Score: sc})
 			}
 
@@ -65,19 +74,45 @@ func (s *PhaseTwoStep) Execute(ctx context.Context, state *ScheduleState) error 
 				return rand.Intn(2) == 0
 			})
 
-			count := remaining
-			if count > len(scored) {
-				count = len(scored)
-			}
-			for i := 0; i < count; i++ {
-				state.Assignments = append(state.Assignments, Assignment{
+			filled := 0
+			for _, candidate := range scored {
+				linkedPlans, ok := planRequiredTogetherAssignments(state, candidate.EmployeeID, sh.ID, dateStr)
+				if !ok {
+					continue
+				}
+
+				plannedAssignments := make([]Assignment, 0, len(linkedPlans)+1)
+				for _, linkedPlan := range linkedPlans {
+					plannedAssignments = append(plannedAssignments, Assignment{
+						ID:         uuid.New().String(),
+						ScheduleID: state.ScheduleID,
+						EmployeeID: candidate.EmployeeID,
+						ShiftID:    linkedPlan.ShiftID,
+						Date:       linkedPlan.Date,
+						Source:     SourceRule,
+					})
+				}
+
+				plannedAssignments = append(plannedAssignments, Assignment{
 					ID:         uuid.New().String(),
 					ScheduleID: state.ScheduleID,
-					EmployeeID: scored[i].EmployeeID,
+					EmployeeID: candidate.EmployeeID,
 					ShiftID:    sh.ID,
 					Date:       dateStr,
 					Source:     SourceFill,
 				})
+
+				nextAssignments, violations := validatePlannedAssignments(ctx, state, checkerAssignments, plannedAssignments)
+				if len(violations) > 0 {
+					continue
+				}
+
+				state.Assignments = append(state.Assignments, plannedAssignments...)
+				checkerAssignments = nextAssignments
+				filled++
+				if filled >= remaining {
+					break
+				}
 			}
 		}
 	}

@@ -33,6 +33,7 @@ func registerAt(r chi.Router, basePath string, h *Handler, appRoleSvc *approle.S
 		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:view:node", "rule:manage")).Get("/", h.List)
 		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:view:node", "rule:manage")).Get("/effective", h.GetEffective)
 		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:manage")).Post("/", h.Create)
+		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:manage")).Post("/batch", h.BatchCreateParsed)
 		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:manage")).Post("/validate", h.Validate)
 		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:view:node", "rule:manage")).Get("/{id}", h.GetByID)
 		r.With(approle.RequireAnyPermission(appRoleSvc, "rule:manage")).Put("/{id}", h.Update)

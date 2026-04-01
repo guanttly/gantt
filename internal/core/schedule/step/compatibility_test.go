@@ -40,8 +40,9 @@ func TestPhaseZeroStep_AppliesFixedScheduleRule(t *testing.T) {
 	state.ShiftOrder = makeShifts("day")
 	state.EffectiveRules = []rule.Rule{
 		{
-			Category: rule.CategoryConstraint,
-			SubType:  rule.SubTypeMust,
+			Category:  rule.CategoryConstraint,
+			SubType:   rule.SubTypeMust,
+			IsEnabled: true,
 			Config: mustJSON(t, rule.RequiredTogetherConfig{
 				Type:        "fixed_schedule",
 				EmployeeIDs: []string{"e1", "e2"},
@@ -133,8 +134,9 @@ func TestPhaseOneStep_ExclusiveRulesMatchLegacyExpectation(t *testing.T) {
 	state.Assignments = []Assignment{{EmployeeID: "e1", ShiftID: "day", Date: "2026-03-23"}}
 	state.EffectiveRules = []rule.Rule{
 		{
-			Category: rule.CategoryConstraint,
-			SubType:  rule.SubTypeForbid,
+			Category:  rule.CategoryConstraint,
+			SubType:   rule.SubTypeForbid,
+			IsEnabled: true,
 			Config: mustJSON(t, rule.ExclusiveShiftsConfig{
 				Type:     "exclusive_shifts",
 				ShiftIDs: []string{"day", "night"},
@@ -172,8 +174,9 @@ func TestPhaseOneStep_SourceRulesMatchLegacyExpectation(t *testing.T) {
 	}
 	state.EffectiveRules = []rule.Rule{
 		{
-			Category: rule.CategoryDependency,
-			SubType:  rule.SubTypeSource,
+			Category:  rule.CategoryDependency,
+			SubType:   rule.SubTypeSource,
+			IsEnabled: true,
 			Config: mustJSON(t, rule.StaffSourceConfig{
 				Type:          "staff_source",
 				TargetShiftID: "night",
@@ -181,6 +184,82 @@ func TestPhaseOneStep_SourceRulesMatchLegacyExpectation(t *testing.T) {
 			}),
 		},
 	}
+
+	s := &PhaseOneStep{}
+	if err := s.Execute(context.Background(), state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := state.Candidates["night|2026-03-23"]
+	want := []string{"e1", "e3"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("night candidates mismatch, want %v, got %v", want, got)
+	}
+}
+
+func TestPhaseOneStep_SourceRulesUseAssociationsAndOffset(t *testing.T) {
+	config := &ScheduleConfig{
+		ShiftIDs: []string{"day", "night"},
+		Requirements: map[string]map[string]int{
+			"night": {"2026-03-23": 2},
+		},
+	}
+	state := NewScheduleState("sch-1", "org-1", "", "2026-03-22", "2026-03-23", "user-1", config)
+	state.ShiftOrder = makeShifts("night")
+	state.Candidates["night|2026-03-23"] = []string{"e1", "e2", "e3"}
+	state.Assignments = []Assignment{
+		{EmployeeID: "e1", ShiftID: "day", Date: "2026-03-22"},
+		{EmployeeID: "e3", ShiftID: "day", Date: "2026-03-22"},
+	}
+	minusOne := -1
+	state.EffectiveRules = []rule.Rule{{
+		Category:       rule.CategoryDependency,
+		SubType:        rule.SubTypeSource,
+		IsEnabled:      true,
+		TimeOffsetDays: &minusOne,
+		Associations: []rule.RuleAssociation{
+			{TargetType: rule.TargetTypeShift, TargetID: "night", Role: rule.AssociationRoleSubject},
+			{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleObject},
+		},
+	}}
+
+	s := &PhaseOneStep{}
+	if err := s.Execute(context.Background(), state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := state.Candidates["night|2026-03-23"]
+	want := []string{"e1", "e3"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("night candidates mismatch, want %v, got %v", want, got)
+	}
+}
+
+func TestPhaseOneStep_RequiredTogetherRulesUseAssociationsAndOffset(t *testing.T) {
+	config := &ScheduleConfig{
+		ShiftIDs: []string{"day", "night"},
+		Requirements: map[string]map[string]int{
+			"night": {"2026-03-23": 2},
+		},
+	}
+	state := NewScheduleState("sch-1", "org-1", "", "2026-03-22", "2026-03-23", "user-1", config)
+	state.ShiftOrder = makeShifts("night")
+	state.Candidates["night|2026-03-23"] = []string{"e1", "e2", "e3"}
+	state.Assignments = []Assignment{
+		{EmployeeID: "e1", ShiftID: "day", Date: "2026-03-22"},
+		{EmployeeID: "e3", ShiftID: "day", Date: "2026-03-22"},
+	}
+	minusOne := -1
+	state.EffectiveRules = []rule.Rule{{
+		Category:       rule.CategoryConstraint,
+		SubType:        rule.SubTypeMust,
+		IsEnabled:      true,
+		TimeOffsetDays: &minusOne,
+		Associations: []rule.RuleAssociation{
+			{TargetType: rule.TargetTypeShift, TargetID: "night", Role: rule.AssociationRoleSubject},
+			{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleObject},
+		},
+	}}
 
 	s := &PhaseOneStep{}
 	if err := s.Execute(context.Background(), state); err != nil {
@@ -254,6 +333,107 @@ func TestFullValidationStep_FindsExclusiveConflictsLikeLegacyValidator(t *testin
 	for _, v := range state.Violations {
 		if v.RuleID != "r-exclusive" {
 			t.Fatalf("expected rule id r-exclusive, got %s", v.RuleID)
+		}
+	}
+}
+
+func TestFullValidationStep_UsesAssociationSemanticsForSourceRule(t *testing.T) {
+	state := NewScheduleState("sch-1", "org-1", "", "2026-03-22", "2026-03-23", "user-1", nil)
+	minusOne := -1
+	state.Assignments = []Assignment{
+		{ID: "a-src", EmployeeID: "e1", ShiftID: "day", Date: "2026-03-22", Source: SourceRule},
+		{ID: "a-ok", EmployeeID: "e1", ShiftID: "night", Date: "2026-03-23", Source: SourceFill},
+		{ID: "a-bad", EmployeeID: "e2", ShiftID: "night", Date: "2026-03-23", Source: SourceFill},
+	}
+	state.EffectiveRules = []rule.Rule{{
+		ID:             "r-source-assoc",
+		Name:           "关联来源",
+		Category:       rule.CategoryDependency,
+		SubType:        rule.SubTypeSource,
+		IsEnabled:      true,
+		TimeOffsetDays: &minusOne,
+		Associations: []rule.RuleAssociation{
+			{TargetType: rule.TargetTypeShift, TargetID: "night", Role: rule.AssociationRoleSubject},
+			{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleObject},
+		},
+	}}
+
+	s := &FullValidationStep{}
+	if err := s.Execute(context.Background(), state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(state.Violations) != 1 {
+		t.Fatalf("expected 1 source-rule violation, got %d", len(state.Violations))
+	}
+	if state.Violations[0].EmployeeID != "e2" {
+		t.Fatalf("expected violation for e2, got %s", state.Violations[0].EmployeeID)
+	}
+}
+
+func TestFullValidationStep_UsesAssociationSemanticsForRequiredTogetherRule(t *testing.T) {
+	state := NewScheduleState("sch-1", "org-1", "", "2026-03-22", "2026-03-23", "user-1", nil)
+	minusOne := -1
+	state.Assignments = []Assignment{
+		{ID: "a-ok-source", EmployeeID: "e1", ShiftID: "day", Date: "2026-03-22", Source: SourceRule},
+		{ID: "a-ok-target", EmployeeID: "e1", ShiftID: "night", Date: "2026-03-23", Source: SourceFill},
+		{ID: "a-bad", EmployeeID: "e2", ShiftID: "night", Date: "2026-03-23", Source: SourceFill},
+	}
+	state.EffectiveRules = []rule.Rule{{
+		ID:             "r-must-assoc",
+		Name:           "关联必须",
+		Category:       rule.CategoryConstraint,
+		SubType:        rule.SubTypeMust,
+		IsEnabled:      true,
+		TimeOffsetDays: &minusOne,
+		Associations: []rule.RuleAssociation{
+			{TargetType: rule.TargetTypeShift, TargetID: "night", Role: rule.AssociationRoleSubject},
+			{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleObject},
+		},
+	}}
+
+	s := &FullValidationStep{}
+	if err := s.Execute(context.Background(), state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(state.Violations) != 1 {
+		t.Fatalf("expected 1 must-rule violation, got %d", len(state.Violations))
+	}
+	if state.Violations[0].EmployeeID != "e2" {
+		t.Fatalf("expected violation for e2, got %s", state.Violations[0].EmployeeID)
+	}
+}
+
+func TestFullValidationStep_UsesAssociationSemanticsForExclusiveRule(t *testing.T) {
+	state := NewScheduleState("sch-1", "org-1", "", "2026-03-23", "2026-03-23", "user-1", nil)
+	state.Assignments = []Assignment{
+		{ID: "a1", EmployeeID: "e1", ShiftID: "day", Date: "2026-03-23", Source: SourceRule},
+		{ID: "a2", EmployeeID: "e1", ShiftID: "night", Date: "2026-03-23", Source: SourceFill},
+	}
+	state.EffectiveRules = []rule.Rule{{
+		ID:        "r-exclusive-assoc",
+		Name:      "关联排他",
+		Category:  rule.CategoryConstraint,
+		SubType:   rule.SubTypeForbid,
+		IsEnabled: true,
+		Associations: []rule.RuleAssociation{
+			{TargetType: rule.TargetTypeShift, TargetID: "night", Role: rule.AssociationRoleSubject},
+			{TargetType: rule.TargetTypeShift, TargetID: "day", Role: rule.AssociationRoleObject},
+		},
+	}}
+
+	s := &FullValidationStep{}
+	if err := s.Execute(context.Background(), state); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(state.Violations) != 2 {
+		t.Fatalf("expected 2 violations for association exclusive conflict, got %d", len(state.Violations))
+	}
+	for _, v := range state.Violations {
+		if v.RuleID != "r-exclusive-assoc" {
+			t.Fatalf("expected rule id r-exclusive-assoc, got %s", v.RuleID)
 		}
 	}
 }

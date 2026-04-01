@@ -1,12 +1,16 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"gantt-saas/internal/common/response"
+	"gantt-saas/internal/infra/config"
 	"gantt-saas/internal/tenant"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -70,14 +74,77 @@ func (h *SystemConfigHandler) UpdateConfig(w http.ResponseWriter, r *http.Reques
 
 	ctx := tenant.SkipTenantGuard(r.Context())
 	for key, value := range input.Configs {
-		result := h.db.WithContext(ctx).
-			Where("`key` = ?", key).
-			Assign(SystemConfig{Value: value}).
-			FirstOrCreate(&SystemConfig{Key: key, Value: value})
-		if result.Error != nil {
-			response.InternalError(w, "更新系统配置失败")
+		var existing SystemConfig
+		err := h.db.WithContext(ctx).Where("`key` = ?", key).First(&existing).Error
+		if err == gorm.ErrRecordNotFound {
+			cfg := SystemConfig{ID: uuid.New().String(), Key: key, Value: value}
+			if err := h.db.WithContext(ctx).Create(&cfg).Error; err != nil {
+				response.InternalError(w, "创建系统配置失败")
+				return
+			}
+		} else if err != nil {
+			response.InternalError(w, "查询系统配置失败")
 			return
+		} else {
+			if err := h.db.WithContext(ctx).Model(&existing).Update("value", value).Error; err != nil {
+				response.InternalError(w, "更新系统配置失败")
+				return
+			}
 		}
 	}
 	response.OK(w, input.Configs)
+}
+
+// LoadAIConfigFromDB 从数据库 system_configs 加载 AI 配置，合并到已有的 AIConfig 上。
+// 数据库配置优先于文件配置。
+func LoadAIConfigFromDB(db *gorm.DB, aiCfg *config.AIConfig) error {
+	ctx := tenant.SkipTenantGuard(context.Background())
+	var configs []SystemConfig
+	if err := db.WithContext(ctx).Find(&configs).Error; err != nil {
+		return err
+	}
+
+	m := make(map[string]string, len(configs))
+	for _, c := range configs {
+		m[c.Key] = c.Value
+	}
+
+	// 如果数据库没有 AI 配置，保持文件配置不变
+	provider := m["ai_provider"]
+	if provider == "" {
+		return nil
+	}
+
+	apiKey := m["ai_api_key"]
+	baseURL := m["ai_base_url"]
+	model := m["ai_model"]
+	enabled := m["ai_enabled"]
+
+	if enabled != "" && enabled != "true" && enabled != "1" {
+		return nil
+	}
+
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	providerCfg := &config.AIProviderConfig{
+		Enabled: true,
+		APIKey:  apiKey,
+		BaseURL: baseURL,
+		Model:   model,
+		Timeout: 60,
+	}
+
+	aiCfg.Enabled = true
+	aiCfg.DefaultProvider = provider
+
+	switch provider {
+	case "openai":
+		aiCfg.OpenAI = providerCfg
+	case "bailian":
+		aiCfg.Bailian = providerCfg
+	case "ollama":
+		aiCfg.Ollama = providerCfg
+	}
+
+	return nil
 }

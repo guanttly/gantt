@@ -57,7 +57,7 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 
 func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 	mgr := NewJWTManager(JWTConfig{Secret: "test", AccessTokenTTL: -1 * time.Second})
-	token, _ := mgr.GenerateAccessToken("user-1", "node-1", "/org/node-1", string(RolePlatformAdmin))
+	token, _ := mgr.GenerateAccessToken("user-1", "node-1", "/org/node-1", string(RolePlatformAdmin), PlatformAdmin)
 
 	handler := AuthMiddleware(mgr)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -75,7 +75,7 @@ func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 
 func TestAuthMiddleware_ValidToken(t *testing.T) {
 	mgr := NewJWTManager(JWTConfig{Secret: "test", AccessTokenTTL: time.Hour})
-	token, _ := mgr.GenerateAccessToken("user-1", "node-1", "/org/node-1", string(RoleScheduler))
+	token, _ := mgr.GenerateAccessToken("user-1", "node-1", "/org/node-1", string(RoleScheduler), PlatformAdmin)
 
 	var capturedClaims *Claims
 	handler := AuthMiddleware(mgr)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
