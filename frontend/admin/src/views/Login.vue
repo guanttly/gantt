@@ -4,6 +4,7 @@ import type { FormInst, FormRules } from 'naive-ui'
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NButton, NForm, NFormItem, NIcon, NInput, useMessage } from 'naive-ui'
+import { extractErrorMessage } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { RoleName } from '@/types/auth'
 
@@ -54,7 +55,7 @@ async function handleLogin() {
     message.success('登录成功')
   }
   catch (e: any) {
-    message.error(e?.response?.data?.message || '登录失败')
+    message.error(extractErrorMessage(e?.response?.data) || e?.message || '登录失败')
   }
   finally {
     loading.value = false

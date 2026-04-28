@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"gantt-saas/internal/ai"
 
@@ -25,8 +26,10 @@ type Intent struct {
 
 // Parser parses user input into intents.
 type Parser struct {
-	provider ai.Provider
-	logger   *zap.Logger
+	provider      ai.Provider
+	selector      ai.ProviderSelector
+	modelResolver ai.NodeModelResolver
+	logger        *zap.Logger
 }
 
 // NewParser creates a new intent parser.
@@ -34,15 +37,31 @@ func NewParser(provider ai.Provider, logger *zap.Logger) *Parser {
 	return &Parser{provider: provider, logger: logger.Named("intent")}
 }
 
+// SetRuntimeConfig sets optional runtime provider/model resolution for this parser.
+func (p *Parser) SetRuntimeConfig(selector ai.ProviderSelector, resolver ai.NodeModelResolver) {
+	p.selector = selector
+	p.modelResolver = resolver
+}
+
 // Parse parses user input and returns the intent.
 func (p *Parser) Parse(ctx context.Context, userInput string) (*Intent, error) {
-	resp, err := p.provider.Chat(ctx, ai.ChatRequest{
+	req := ai.ChatRequest{
 		Messages: []ai.Message{
 			{Role: "system", Content: intentSystemPrompt},
 			{Role: "user", Content: userInput},
 		},
 		Temperature: 0.1,
-	})
+		MaxTokens:   256,
+	}
+
+	provider := p.provider
+	ctx, cancel, provider, req := ai.ApplyNodeModelConfig(ctx, provider, p.selector, p.modelResolver, ai.AppScheduling, ai.WorkflowAIChat, ai.NodeIntentClassify, req, 20*time.Second, p.logger)
+	defer cancel()
+	if req.Model == "" {
+		req.Model = defaultIntentModel(provider.Name())
+	}
+
+	resp, err := provider.Chat(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("intent parse failed: %w", err)
 	}
@@ -62,4 +81,17 @@ func (p *Parser) Parse(ctx context.Context, userInput string) (*Intent, error) {
 
 	p.logger.Info("intent parsed", zap.String("action", intent.Action), zap.Float64("confidence", intent.Confidence))
 	return intent, nil
+}
+
+func defaultIntentModel(provider string) string {
+	switch provider {
+	case "bailian":
+		return "qwen-turbo"
+	case "openai":
+		return "gpt-4o-mini"
+	case "ollama":
+		return "qwen2.5:7b"
+	default:
+		return ""
+	}
 }

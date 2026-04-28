@@ -51,7 +51,9 @@ type Service struct {
 	leaveRepo           *leave.Repository
 	groupMemberProvider step.GroupMemberProvider
 	orgNodeResolver     OrgNodeTypeChecker
-	aiProvider          ai.Provider           // 可选，为 nil 时不支持 AI 排班
+	aiProvider          ai.Provider // 可选，为 nil 时不支持 AI 排班
+	aiProviderSelector  ai.ProviderSelector
+	modelResolver       ai.NodeModelResolver
 	broadcaster         websocket.Broadcaster // 可选，为 nil 时不推送 WS
 	logger              *zap.Logger
 }
@@ -83,6 +85,12 @@ func NewService(
 // SetAIProvider 设置 AI 提供者（可选）。
 func (s *Service) SetAIProvider(p ai.Provider) {
 	s.aiProvider = p
+}
+
+// SetAIRuntimeConfig 设置 AI provider 选择器与工作流节点模型解析器。
+func (s *Service) SetAIRuntimeConfig(selector ai.ProviderSelector, resolver ai.NodeModelResolver) {
+	s.aiProviderSelector = selector
+	s.modelResolver = resolver
 }
 
 // SetBroadcaster 设置 WebSocket 广播器（可选）。
@@ -243,6 +251,8 @@ func (s *Service) Generate(ctx context.Context, id string) (*GenerateResult, err
 			GroupMemberProvider: s.groupMemberProvider,
 			DraftSaver:          s.repo,
 			AIProvider:          s.aiProvider,
+			ProviderSelector:    s.aiProviderSelector,
+			ModelResolver:       s.modelResolver,
 			Broadcaster:         s.broadcaster,
 			Logger:              s.logger,
 		})

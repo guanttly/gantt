@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"gantt-saas/internal/infra/config"
 
@@ -14,9 +15,10 @@ import (
 
 // OpenAIProvider 实现 OpenAI 兼容的 Provider。
 type OpenAIProvider struct {
-	client *openai.Client
-	model  string
-	logger *zap.Logger
+	client  *openai.Client
+	model   string
+	timeout time.Duration
+	logger  *zap.Logger
 }
 
 // NewOpenAIProvider 创建 OpenAI Provider。
@@ -35,15 +37,19 @@ func NewOpenAIProvider(cfg *config.AIProviderConfig, logger *zap.Logger) (*OpenA
 	)
 
 	return &OpenAIProvider{
-		client: &client,
-		model:  cfg.Model,
-		logger: logger.Named("openai"),
+		client:  &client,
+		model:   cfg.Model,
+		timeout: NormalizeTimeout(cfg.Timeout, 60*time.Second),
+		logger:  logger.Named("openai"),
 	}, nil
 }
 
 func (p *OpenAIProvider) Name() string { return "openai" }
 
 func (p *OpenAIProvider) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	ctx, cancel := WithProviderTimeout(ctx, p.timeout)
+	defer cancel()
+
 	model := req.Model
 	if model == "" {
 		model = p.model
@@ -91,6 +97,8 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 }
 
 func (p *OpenAIProvider) ChatStream(ctx context.Context, req ChatRequest) (<-chan StreamChunk, error) {
+	ctx, cancel := WithProviderTimeout(ctx, p.timeout)
+
 	model := req.Model
 	if model == "" {
 		model = p.model
@@ -121,6 +129,7 @@ func (p *OpenAIProvider) ChatStream(ctx context.Context, req ChatRequest) (<-cha
 
 	ch := make(chan StreamChunk, 10)
 	go func() {
+		defer cancel()
 		defer close(ch)
 		defer stream.Close()
 

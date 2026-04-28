@@ -1,19 +1,44 @@
 // AI 服务 API
-import client from './client'
-import { getAccessToken } from './client'
+import client, { getAccessToken } from './client'
 
 export interface ChatRequest {
   message: string
+  conversation_id?: string
   context?: Record<string, unknown>
 }
 
 export interface ChatResponse {
+  conversation_id?: string
   reply: string
   actions?: Array<{
     type: string
     label: string
-    data: Record<string, unknown>
+    payload?: Record<string, unknown>
+    data?: Record<string, unknown>
   }>
+}
+
+export interface AIConversationSummary {
+  id: string
+  title: string
+  message_count: number
+  last_message_at?: string | null
+  last_message_preview?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AIConversationMessage {
+  id: string
+  conversation_id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AIConversationDetail extends AIConversationSummary {
+  messages: AIConversationMessage[]
 }
 
 export interface ParseRuleRequest {
@@ -107,7 +132,32 @@ export interface AIUsage {
 
 /** AI 对话 */
 export function chat(data: ChatRequest) {
-  return client.post<ChatResponse>('/ai/chat', data).then(r => r.data)
+  return client.post<ChatResponse>('/ai/chat', data, { timeout: 120000 }).then(r => r.data)
+}
+
+/** 列出 AI 会话 */
+export function listChatConversations() {
+  return client.get<AIConversationSummary[]>('/ai/conversations').then(r => r.data)
+}
+
+/** 创建 AI 会话 */
+export function createChatConversation() {
+  return client.post<AIConversationSummary>('/ai/conversations').then(r => r.data)
+}
+
+/** 获取 AI 会话详情 */
+export function getChatConversation(conversationId: string) {
+  return client.get<AIConversationDetail>(`/ai/conversations/${conversationId}`).then(r => r.data)
+}
+
+/** 更新 AI 会话 */
+export function updateChatConversation(conversationId: string, data: { title: string }) {
+  return client.patch<AIConversationSummary>(`/ai/conversations/${conversationId}`, data).then(r => r.data)
+}
+
+/** 删除 AI 会话 */
+export function deleteChatConversation(conversationId: string) {
+  return client.delete(`/ai/conversations/${conversationId}`).then(r => r.data)
 }
 
 /** AI 解析规则 */

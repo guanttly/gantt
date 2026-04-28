@@ -317,7 +317,7 @@ function renderGantt() {
   timelineOptions.start = startDate
   timelineOptions.end = endDate
 
-  timeline = new Timeline(timelineContainer.value, items, groups, timelineOptions)
+  timeline = new Timeline(timelineContainer.value, items as any, groups as any, timelineOptions)
 
   setTimeout(() => {
     if (timeline)

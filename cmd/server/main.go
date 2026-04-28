@@ -161,6 +161,7 @@ type appDependencies struct {
 	organizationHandler *admin.OrganizationHandler
 	platformUserHandler *admin.PlatformUserHandler
 	systemConfigHandler *admin.SystemConfigHandler
+	appConfigHandler    *admin.AppConfigHandler
 	auditLogger         *audit.Logger
 	auditHandler        *audit.Handler
 	subscriptionHandler *subscription.Handler
@@ -231,6 +232,9 @@ func initDependencies(
 
 	quotaRepo := quota.NewRepository(db)
 	quotaMgr := quota.NewManager(quotaRepo, cfg.AI.Quota.DefaultMonthlyTokens, logger)
+	conversationStore := chat.NewConversationStore(db)
+	appConfigSvc := admin.NewAppConfigService(db)
+	appConfigHandler := admin.NewAppConfigHandler(appConfigSvc)
 
 	// 从数据库加载 AI 配置（管理后台保存的设置），合并到文件配置
 	if err := admin.LoadAIConfigFromDB(db, &cfg.AI); err != nil {
@@ -245,10 +249,15 @@ func initDependencies(
 			return nil, fmt.Errorf("获取默认 AI provider 失败: %w", err)
 		}
 		scheduleSvc.SetAIProvider(provider)
+		scheduleSvc.SetAIRuntimeConfig(factory, appConfigSvc)
 		intentParser := intent.NewParser(provider, logger)
+		intentParser.SetRuntimeConfig(factory, appConfigSvc)
 		chatHandler := chat.NewHandler(intentParser, provider, logger)
+		chatHandler.SetRuntimeConfig(factory, appConfigSvc)
+		chatHandler.SetConversationStore(conversationStore)
 		ruleParser := ruleparse.NewParser(provider, logger)
-		aiHandler = aiapi.NewHandler(chatHandler, ruleParser, quotaMgr, factory, logger)
+		ruleParser.SetRuntimeConfig(factory, appConfigSvc)
+		aiHandler = aiapi.NewHandler(chatHandler, conversationStore, ruleParser, quotaMgr, factory, logger)
 	} else {
 		logger.Info("AI provider 未启用，跳过 AI HTTP 路由注册")
 	}
@@ -277,9 +286,11 @@ func initDependencies(
 		ruleRepo,
 		scheduleRepo,
 		quotaRepo,
+		conversationStore,
 		auditRepo,
 		subRepo,
 		systemConfigHandler,
+		appConfigHandler,
 	); err != nil {
 		return nil, err
 	}
@@ -311,6 +322,7 @@ func initDependencies(
 		organizationHandler: organizationHandler,
 		platformUserHandler: platformUserHandler,
 		systemConfigHandler: systemConfigHandler,
+		appConfigHandler:    appConfigHandler,
 		auditLogger:         auditLogger,
 		auditHandler:        auditHandler,
 		subscriptionHandler: subHandler,
@@ -360,9 +372,11 @@ func autoMigrate(
 	ruleRepo *rule.Repository,
 	scheduleRepo *schedule.Repository,
 	quotaRepo *quota.Repository,
+	conversationStore *chat.ConversationStore,
 	auditRepo *audit.Repository,
 	subRepo *subscription.Repository,
 	systemConfigHandler *admin.SystemConfigHandler,
+	appConfigHandler *admin.AppConfigHandler,
 ) error {
 	steps := []struct {
 		name string
@@ -378,9 +392,11 @@ func autoMigrate(
 		{name: "rule", fn: ruleRepo.AutoMigrate},
 		{name: "schedule", fn: scheduleRepo.AutoMigrate},
 		{name: "ai_quota", fn: quotaRepo.AutoMigrate},
+		{name: "ai_conversation", fn: conversationStore.AutoMigrate},
 		{name: "audit", fn: auditRepo.AutoMigrate},
 		{name: "subscription", fn: subRepo.AutoMigrate},
 		{name: "system_config", fn: systemConfigHandler.AutoMigrate},
+		{name: "app_config", fn: appConfigHandler.AutoMigrate},
 	}
 
 	for _, step := range steps {
@@ -426,7 +442,7 @@ func registerRoutes(srv *appserver.Server, deps *appDependencies) {
 			r.Group(func(r chi.Router) {
 				r.Use(auth.RequirePermission("platform:admin"))
 				auth.RegisterAdminRoutes(r, deps.authHandler)
-				admin.RegisterRoutes(r, deps.dashboardHandler, deps.systemConfigHandler, deps.organizationHandler)
+				admin.RegisterRoutes(r, deps.dashboardHandler, deps.systemConfigHandler, deps.appConfigHandler, deps.organizationHandler)
 				subscription.RegisterRoutes(r, deps.subscriptionHandler)
 				audit.RegisterRoutes(r, deps.auditHandler)
 			})

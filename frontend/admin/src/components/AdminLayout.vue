@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BarChartOutline, BusinessOutline, DocumentTextOutline, LogOutOutline, PeopleOutline, PersonCircleOutline, PersonOutline, ReceiptOutline, SettingsOutline } from '@vicons/ionicons5'
+import { AppsOutline, BarChartOutline, BusinessOutline, DocumentTextOutline, LogOutOutline, PeopleOutline, PersonCircleOutline, PersonOutline, ReceiptOutline, SettingsOutline } from '@vicons/ionicons5'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NButton, NIcon } from 'naive-ui'
@@ -17,6 +17,7 @@ const menuItems = [
   { path: '/platform-users', label: '平台账号', icon: PersonOutline, requiredRole: RoleName.OrgAdmin },
   { path: '/subscriptions', label: '订阅管理', icon: ReceiptOutline, requiredRole: RoleName.PlatformAdmin },
   { path: '/audit', label: '审计日志', icon: DocumentTextOutline, requiredRole: RoleName.PlatformAdmin },
+  { path: '/app-config', label: '应用配置', icon: AppsOutline, requiredRole: RoleName.PlatformAdmin },
   { path: '/config', label: '系统配置', icon: SettingsOutline, requiredRole: RoleName.PlatformAdmin },
 ]
 
@@ -128,9 +129,6 @@ async function handleLogout() {
     </aside>
 
     <div class="content-area">
-      <header class="content-header">
-        <h1 class="content-heading">{{ visibleMenuItems.find(item => item.path === activePath)?.label || '管理后台' }}</h1>
-      </header>
       <main class="main-content">
         <router-view />
       </main>
@@ -299,33 +297,35 @@ async function handleLogout() {
   flex-direction: column;
 }
 
-.content-header {
-  display: flex;
-  align-items: center;
-  min-height: 88px;
-  padding: 22px 28px 0;
-}
-
-.content-eyebrow {
-  margin: 0 0 6px;
-  color: #0f766e;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.content-heading {
-  margin: 0;
-  color: #0f172a;
-  font-size: 32px;
-  line-height: 1.1;
-}
-
 .main-content {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 118, 110, 0.42) rgba(148, 163, 184, 0.14);
+}
+
+.main-content::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.main-content::-webkit-scrollbar-track {
+  background: rgba(148, 163, 184, 0.12);
+  border-radius: 999px;
+}
+
+.main-content::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(15, 118, 110, 0.5), rgba(59, 130, 246, 0.32));
+  background-clip: content-box;
+}
+
+.main-content::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(13, 148, 136, 0.66), rgba(59, 130, 246, 0.46));
+  background-clip: content-box;
 }
 
 @media (max-width: 960px) {
@@ -337,15 +337,6 @@ async function handleLogout() {
 
   .sidebar {
     width: 100%;
-  }
-
-  .content-header {
-    min-height: auto;
-    padding: 18px 18px 0;
-  }
-
-  .content-heading {
-    font-size: 26px;
   }
 }
 </style>

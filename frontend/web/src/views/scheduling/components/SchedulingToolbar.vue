@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { Refresh } from '@element-plus/icons-vue'
+import { Download, Refresh } from '@element-plus/icons-vue'
+
+defineProps<{
+  readonly?: boolean
+}>()
 
 const emit = defineEmits<{
   refresh: []
-  toggleChat: []
-  quickStart: []
+  export: []
 }>()
 
 const dateRange = defineModel<[string, string]>('dateRange', { required: true })
@@ -65,11 +68,11 @@ function handleNextWeek() {
       </el-button>
     </div>
     <div class="toolbar-right">
-      <el-button type="primary" size="default" @click="emit('quickStart')">
-        一键排班
-      </el-button>
-      <el-button size="default" @click="emit('toggleChat')">
-        排班助手
+      <span class="toolbar-hint">
+        {{ readonly ? '当前为展示与导出视图' : '支持拖拽调整与导出当前周期' }}
+      </span>
+      <el-button :icon="Download" type="primary" size="default" @click="emit('export')">
+        导出排班
       </el-button>
     </div>
   </div>
@@ -90,5 +93,35 @@ function handleNextWeek() {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.toolbar-right {
+  justify-content: flex-end;
+}
+
+.toolbar-hint {
+  color: #6b7280;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .scheduling-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    flex-wrap: wrap;
+  }
+
+  .toolbar-right {
+    justify-content: flex-start;
+  }
+
+  .toolbar-hint {
+    white-space: normal;
+  }
 }
 </style>

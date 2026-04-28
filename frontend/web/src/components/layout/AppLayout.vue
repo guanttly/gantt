@@ -41,7 +41,11 @@ const navGroups: NavItem[] = [
       { path: '/scheduling/mine', label: '我的排班', requiredPermission: 'schedule:view:self' },
       { path: '/scheduling', label: '排班列表', requiredAnyPermissions: ['schedule:view:node', 'schedule:view:all'] },
       { path: '/scheduling/create', label: '创建排班', requiredPermission: 'schedule:create' },
-      { path: '/scheduling/workspace', label: '排班执行', requiredPermission: 'schedule:execute' },
+      {
+        path: '/scheduling/workspace',
+        label: '手工调整与导出',
+        requiredAnyPermissions: ['schedule:view:node', 'schedule:view:all', 'schedule:adjust', 'schedule:execute', 'schedule:publish'],
+      },
     ],
   },
   {

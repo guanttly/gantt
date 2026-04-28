@@ -31,6 +31,71 @@ export function updateSystemConfig(data: SystemConfig) {
   return client.put('/admin/system/config', { configs: data }).then(r => r.data)
 }
 
+// ======== 应用配置 ========
+
+export interface AIModelConfigView {
+  provider: string
+  model: string
+  timeout_seconds: number
+  temperature?: number | null
+  max_tokens: number
+  enabled: boolean
+}
+
+export interface WorkflowPosition {
+  x: number
+  y: number
+}
+
+export interface WorkflowEdgeView {
+  from: string
+  to: string
+}
+
+export interface WorkflowNodeView {
+  key: string
+  name: string
+  kind: string
+  description: string
+  configurable: boolean
+  position: WorkflowPosition
+  model_config: AIModelConfigView
+}
+
+export interface WorkflowConfigView {
+  key: string
+  name: string
+  version: string
+  description: string
+  enabled: boolean
+  nodes: WorkflowNodeView[]
+  edges: WorkflowEdgeView[]
+}
+
+export interface AppConfigView {
+  code: string
+  name: string
+  description: string
+  settings: Record<string, string>
+  workflows: WorkflowConfigView[]
+}
+
+export function listAppConfigs() {
+  return client.get<AppConfigView[]>('/admin/app-config/apps').then(r => r.data)
+}
+
+export function updateAppSettings(appCode: string, settings: Record<string, string>) {
+  return client.put<Record<string, string>>(`/admin/app-config/apps/${appCode}/settings`, { settings }).then(r => r.data)
+}
+
+export function updateAppWorkflow(appCode: string, workflowKey: string, workflow: Partial<WorkflowConfigView>) {
+  return client.put<WorkflowConfigView>(`/admin/app-config/apps/${appCode}/workflows/${workflowKey}`, workflow).then(r => r.data)
+}
+
+export function updateWorkflowNodeModel(appCode: string, workflowKey: string, nodeKey: string, model: AIModelConfigView) {
+  return client.put<AIModelConfigView>(`/admin/app-config/apps/${appCode}/workflows/${workflowKey}/nodes/${nodeKey}/model`, model).then(r => r.data)
+}
+
 // ======== 订阅管理 ========
 
 export interface Subscription {

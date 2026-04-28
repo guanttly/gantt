@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"gantt-saas/internal/ai"
 
@@ -152,8 +153,10 @@ type ParseBatchResult struct {
 
 // Parser 规则解析器。
 type Parser struct {
-	provider ai.Provider
-	logger   *zap.Logger
+	provider      ai.Provider
+	selector      ai.ProviderSelector
+	modelResolver ai.NodeModelResolver
+	logger        *zap.Logger
 }
 
 // NewParser 创建规则解析器。
@@ -161,16 +164,27 @@ func NewParser(provider ai.Provider, logger *zap.Logger) *Parser {
 	return &Parser{provider: provider, logger: logger.Named("ruleparse")}
 }
 
+// SetRuntimeConfig sets optional runtime provider/model resolution for rule parsing nodes.
+func (p *Parser) SetRuntimeConfig(selector ai.ProviderSelector, resolver ai.NodeModelResolver) {
+	p.selector = selector
+	p.modelResolver = resolver
+}
+
 // Parse 将自然语言描述转为规则配置 JSON。
 func (p *Parser) Parse(ctx context.Context, description string, opts ...ParseOptions) (*RuleConfig, error) {
 	options := firstParseOptions(opts)
-	resp, err := p.provider.Chat(ctx, ai.ChatRequest{
+	req := ai.ChatRequest{
 		Messages: []ai.Message{
 			{Role: "system", Content: buildPrompt(ruleParseSystemPrompt, options)},
 			{Role: "user", Content: description},
 		},
 		Temperature: 0.1,
-	})
+	}
+	provider := p.provider
+	ctx, cancel, provider, req := ai.ApplyNodeModelConfig(ctx, provider, p.selector, p.modelResolver, ai.AppScheduling, ai.WorkflowRuleParse, ai.NodeRuleParse, req, 120*time.Second, p.logger)
+	defer cancel()
+
+	resp, err := provider.Chat(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("rule parse failed: %w", err)
 	}
@@ -202,13 +216,18 @@ func (p *Parser) Parse(ctx context.Context, description string, opts ...ParseOpt
 // ParseBatch 将包含多条规则的自然语言描述批量转为规则配置。
 func (p *Parser) ParseBatch(ctx context.Context, description string, opts ...ParseOptions) (*ParseBatchResult, error) {
 	options := firstParseOptions(opts)
-	resp, err := p.provider.Chat(ctx, ai.ChatRequest{
+	req := ai.ChatRequest{
 		Messages: []ai.Message{
 			{Role: "system", Content: buildPrompt(ruleParseBatchSystemPrompt, options)},
 			{Role: "user", Content: description},
 		},
 		Temperature: 0.1,
-	})
+	}
+	provider := p.provider
+	ctx, cancel, provider, req := ai.ApplyNodeModelConfig(ctx, provider, p.selector, p.modelResolver, ai.AppScheduling, ai.WorkflowRuleParse, ai.NodeRuleBatchParse, req, 180*time.Second, p.logger)
+	defer cancel()
+
+	resp, err := provider.Chat(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("rule batch parse failed: %w", err)
 	}
@@ -256,13 +275,33 @@ func (p *Parser) ParseBatch(ctx context.Context, description string, opts ...Par
 // 调用方负责收集完整文本后调用 ParseBatchFromContent 解析 JSON。
 func (p *Parser) ParseBatchStream(ctx context.Context, description string, opts ...ParseOptions) (<-chan ai.StreamChunk, error) {
 	options := firstParseOptions(opts)
-	return p.provider.ChatStream(ctx, ai.ChatRequest{
+	req := ai.ChatRequest{
 		Messages: []ai.Message{
 			{Role: "system", Content: buildPrompt(ruleParseBatchSystemPrompt, options)},
 			{Role: "user", Content: description},
 		},
 		Temperature: 0.1,
-	})
+	}
+	provider := p.provider
+	ctx, cancel, provider, req := ai.ApplyNodeModelConfig(ctx, provider, p.selector, p.modelResolver, ai.AppScheduling, ai.WorkflowRuleParse, ai.NodeRuleBatchParse, req, 180*time.Second, p.logger)
+	ch, err := provider.ChatStream(ctx, req)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	return cancelOnDone(ch, cancel), nil
+}
+
+func cancelOnDone(ch <-chan ai.StreamChunk, cancel context.CancelFunc) <-chan ai.StreamChunk {
+	out := make(chan ai.StreamChunk, 10)
+	go func() {
+		defer cancel()
+		defer close(out)
+		for chunk := range ch {
+			out <- chunk
+		}
+	}()
+	return out
 }
 
 // ParseBatchFromContent 从 LLM 完整输出文本中解析批量规则结果。

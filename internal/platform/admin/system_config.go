@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"gantt-saas/internal/common/response"
 	"gantt-saas/internal/infra/config"
@@ -19,6 +20,16 @@ type SystemConfig struct {
 	ID    string `gorm:"primaryKey;size:64" json:"id"`
 	Key   string `gorm:"size:128;not null;uniqueIndex:uk_config_key" json:"key"`
 	Value string `gorm:"type:text" json:"value"`
+}
+
+var systemConfigAllowedKeys = map[string]struct{}{
+	"ai_enabled":  {},
+	"ai_provider": {},
+	"ai_model":    {},
+	"ai_api_key":  {},
+	"ai_base_url": {},
+	"system_name": {},
+	"system_logo": {},
 }
 
 // TableName 指定表名。
@@ -53,7 +64,9 @@ func (h *SystemConfigHandler) GetConfig(w http.ResponseWriter, r *http.Request) 
 
 	configMap := make(map[string]string)
 	for _, c := range configs {
-		configMap[c.Key] = c.Value
+		if isAllowedSystemConfigKey(c.Key) {
+			configMap[c.Key] = c.Value
+		}
 	}
 	response.OK(w, configMap)
 }
@@ -71,9 +84,10 @@ func (h *SystemConfigHandler) UpdateConfig(w http.ResponseWriter, r *http.Reques
 		response.BadRequest(w, "请求参数格式错误")
 		return
 	}
+	filtered := filterSystemConfigs(input.Configs)
 
 	ctx := tenant.SkipTenantGuard(r.Context())
-	for key, value := range input.Configs {
+	for key, value := range filtered {
 		var existing SystemConfig
 		err := h.db.WithContext(ctx).Where("`key` = ?", key).First(&existing).Error
 		if err == gorm.ErrRecordNotFound {
@@ -92,7 +106,22 @@ func (h *SystemConfigHandler) UpdateConfig(w http.ResponseWriter, r *http.Reques
 			}
 		}
 	}
-	response.OK(w, input.Configs)
+	response.OK(w, filtered)
+}
+
+func isAllowedSystemConfigKey(key string) bool {
+	_, ok := systemConfigAllowedKeys[key]
+	return ok
+}
+
+func filterSystemConfigs(configs map[string]string) map[string]string {
+	filtered := make(map[string]string)
+	for key, value := range configs {
+		if isAllowedSystemConfigKey(key) {
+			filtered[key] = value
+		}
+	}
+	return filtered
 }
 
 // LoadAIConfigFromDB 从数据库 system_configs 加载 AI 配置，合并到已有的 AIConfig 上。
@@ -131,7 +160,7 @@ func LoadAIConfigFromDB(db *gorm.DB, aiCfg *config.AIConfig) error {
 		APIKey:  apiKey,
 		BaseURL: baseURL,
 		Model:   model,
-		Timeout: 60,
+		Timeout: 60 * time.Second,
 	}
 
 	aiCfg.Enabled = true

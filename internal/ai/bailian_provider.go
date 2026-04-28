@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"gantt-saas/internal/infra/config"
 
@@ -24,6 +25,7 @@ type BailianProvider struct {
 	apiKey     string
 	baseURL    string
 	model      string
+	timeout    time.Duration
 	logger     *zap.Logger
 }
 
@@ -48,6 +50,7 @@ func NewBailianProvider(cfg *config.AIProviderConfig, logger *zap.Logger) (*Bail
 		apiKey:     cfg.APIKey,
 		baseURL:    baseURL,
 		model:      cfg.Model,
+		timeout:    NormalizeTimeout(cfg.Timeout, 60*time.Second),
 		logger:     logger.Named("bailian"),
 	}, nil
 }
@@ -74,6 +77,9 @@ func normalizeBailianURL(raw string) string {
 func (p *BailianProvider) Name() string { return "bailian" }
 
 func (p *BailianProvider) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	ctx, cancel := WithProviderTimeout(ctx, p.timeout)
+	defer cancel()
+
 	model := req.Model
 	if model == "" {
 		model = p.model
@@ -121,6 +127,8 @@ func (p *BailianProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 }
 
 func (p *BailianProvider) ChatStream(ctx context.Context, req ChatRequest) (<-chan StreamChunk, error) {
+	ctx, cancel := WithProviderTimeout(ctx, p.timeout)
+
 	model := req.Model
 	if model == "" {
 		model = p.model
@@ -170,6 +178,7 @@ func (p *BailianProvider) ChatStream(ctx context.Context, req ChatRequest) (<-ch
 	ch := make(chan StreamChunk, 10)
 
 	go func() {
+		defer cancel()
 		defer close(ch)
 
 		resp, err := p.httpClient.Do(httpReq)

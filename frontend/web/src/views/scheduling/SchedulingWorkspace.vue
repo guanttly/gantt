@@ -1,17 +1,16 @@
 <script setup lang="ts">
-import { defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue'
-import SchedulingProgressBar from './components/SchedulingProgressBar.vue'
+import { ElMessage } from 'element-plus'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { exportSchedule } from '@/api/schedules'
+import { useAuthStore } from '@/stores/auth'
 import SchedulingToolbar from './components/SchedulingToolbar.vue'
 
-const ChatAssistant = defineAsyncComponent(() => import('./components/ChatAssistant/index.vue'))
 const SchedulingGantt = defineAsyncComponent(() => import('./components/SchedulingGantt.vue'))
-
-// 侧边栏状态
-const showChatPanel = ref(false)
-const chatAssistantRef = ref()
+const route = useRoute()
+const auth = useAuthStore()
 const ganttRef = ref()
-const hasOpenedChatPanel = ref(false)
-const pendingQuickStart = ref<{ startDate: string, endDate: string } | null>(null)
+const isReadonly = computed(() => !auth.hasPermission('schedule:adjust'))
 
 // 日期范围 — 默认本周
 function formatDateLocal(date: Date): string {
@@ -38,73 +37,74 @@ function handleRefresh() {
   ganttRef.value?.refresh()
 }
 
-function toggleChatPanel() {
-  if (!showChatPanel.value)
-    hasOpenedChatPanel.value = true
-  showChatPanel.value = !showChatPanel.value
+function readQueryDate(value: unknown) {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const normalized = value.trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : null
 }
 
-function handleQuickStart() {
-  hasOpenedChatPanel.value = true
-  if (!showChatPanel.value) {
-    showChatPanel.value = true
+function syncRangeFromRoute() {
+  const startDate = readQueryDate(route.query.start_date)
+  const endDate = readQueryDate(route.query.end_date)
+  if (!startDate || !endDate) {
+    return
   }
-
-  const daysUntilNextMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek)
-  const nextMonday = new Date(today)
-  nextMonday.setDate(today.getDate() + daysUntilNextMonday)
-  const nextSunday = new Date(nextMonday)
-  nextSunday.setDate(nextMonday.getDate() + 6)
-
-  pendingQuickStart.value = {
-    startDate: formatDateLocal(nextMonday),
-    endDate: formatDateLocal(nextSunday),
-  }
-
-  nextTick(() => {
-    if (chatAssistantRef.value?.startScheduleCreationWorkflow && pendingQuickStart.value) {
-      chatAssistantRef.value.startScheduleCreationWorkflow(pendingQuickStart.value)
-      pendingQuickStart.value = null
-    }
-  })
+  dateRange.value = [startDate, endDate]
 }
 
-watch(chatAssistantRef, (instance) => {
-  if (instance?.startScheduleCreationWorkflow && pendingQuickStart.value) {
-    instance.startScheduleCreationWorkflow(pendingQuickStart.value)
-    pendingQuickStart.value = null
-  }
-})
+function resolveExportFilename() {
+  return `schedule-${dateRange.value[0]}-${dateRange.value[1]}.xlsx`
+}
 
-onMounted(() => {
-  // 页面初始化
-})
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+async function handleExport() {
+  try {
+    const response = await exportSchedule({
+      start_date: dateRange.value[0],
+      end_date: dateRange.value[1],
+      format: 'xlsx',
+    })
+    downloadBlob(response.data as Blob, resolveExportFilename())
+    ElMessage.success('排班导出成功')
+  }
+  catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '排班导出失败')
+  }
+}
+
+watch(() => [route.query.start_date, route.query.end_date], () => {
+  syncRangeFromRoute()
+}, { immediate: true })
 </script>
 
 <template>
   <div class="scheduling-page">
     <div class="scheduling-container">
-      <!-- 主工作区 -->
       <div class="scheduling-main">
-        <SchedulingProgressBar />
         <SchedulingToolbar
           v-model:date-range="dateRange"
+          :readonly="isReadonly"
           @refresh="handleRefresh"
-          @toggle-chat="toggleChatPanel"
-          @quick-start="handleQuickStart"
+          @export="handleExport"
         />
         <SchedulingGantt
           ref="ganttRef"
           :date-range="dateRange"
+          :readonly="isReadonly"
         />
       </div>
-
-      <!-- 智能排班助手侧边栏 -->
-      <transition name="slide">
-        <div v-if="hasOpenedChatPanel" v-show="showChatPanel" class="scheduling-aside">
-          <ChatAssistant ref="chatAssistantRef" @close="toggleChatPanel" />
-        </div>
-      </transition>
     </div>
   </div>
 </template>
@@ -130,46 +130,11 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.scheduling-aside {
-  width: 550px;
-  display: flex;
-  flex-direction: column;
-  background: #ffffff;
-  border-left: 1px solid #e4e7ed;
-  overflow: hidden;
-}
-
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s ease;
-}
-
-.slide-enter-from,
-.slide-leave-to {
-  transform: translateX(100%);
-  opacity: 0;
-}
-
-@media (max-width: 1200px) {
-  .scheduling-aside {
-    width: 360px;
-  }
-}
-
 @media (max-width: 768px) {
-  .scheduling-container {
-    flex-direction: column;
-  }
-
-  .scheduling-aside {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    max-width: 400px;
-    z-index: 100;
-    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+  .scheduling-page,
+  .scheduling-container,
+  .scheduling-main {
+    min-height: 0;
   }
 }
 </style>

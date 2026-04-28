@@ -5,7 +5,7 @@ server:
   port: 8080
   mode: development        # development / production
   read_timeout: 15s
-  write_timeout: 15s
+  write_timeout: 120s
   shutdown_timeout: 10s
 
 database:
@@ -43,20 +43,20 @@ ai:
     api_key: ""            # OpenAI API Key
     base_url: ""           # 可选，自定义 Base URL（兼容第三方 OpenAI 接口）
     model: "gpt-4o-mini"
-    timeout: 60
+    timeout: 60s
 
   bailian:
     enabled: false
     api_key: ""            # 阿里云百炼 DashScope API Key
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
     model: "qwen-turbo"
-    timeout: 60
+    timeout: 60s
 
   ollama:
     enabled: false
     base_url: "http://localhost:11434"
     model: "qwen2.5:7b"
-    timeout: 300
+    timeout: 300s
 
   quota:
     default_monthly_tokens: 100000   # 每个组织每月默认 token 限额

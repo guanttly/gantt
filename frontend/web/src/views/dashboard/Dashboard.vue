@@ -83,8 +83,8 @@ const quickActions = computed<QuickAction[]>(() => [
     ? { label: '创建排班', icon: Calendar, path: '/scheduling/create', color: '#7c3aed' }
     : null,
   { label: '请假管理', icon: User, path: '/leaves', color: '#2563eb' },
-  auth.hasPermission('schedule:execute')
-    ? { label: '排班工作台', icon: Calendar, path: '/scheduling/workspace', color: '#0f766e' }
+  auth.hasAnyPermission(['schedule:view:node', 'schedule:view:all', 'schedule:adjust', 'schedule:execute', 'schedule:publish'])
+    ? { label: '手工调整工作台', icon: Calendar, path: '/scheduling/workspace', color: '#0f766e' }
     : null,
   { label: 'AI 助手', icon: ChatDotRound, path: '/ai/chat', color: '#059669' },
 ].filter((item): item is QuickAction => item !== null))

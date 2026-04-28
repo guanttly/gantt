@@ -15,8 +15,10 @@ import (
 
 // AISelectStep 使用 AI 为填充阶段选择最优候选人。
 type AISelectStep struct {
-	Provider ai.Provider
-	Logger   *zap.Logger
+	Provider      ai.Provider
+	Selector      ai.ProviderSelector
+	ModelResolver ai.NodeModelResolver
+	Logger        *zap.Logger
 }
 
 func (s *AISelectStep) Name() string { return "ai_select" }
@@ -85,14 +87,19 @@ func (s *AISelectStep) Execute(ctx context.Context, state *ScheduleState) error 
 
 	systemPrompt := "You are a scheduling engine. Given vacancies and candidates, produce optimal shift assignments as a JSON array. Each employee can only work one shift per day. Distribute workload evenly."
 
-	resp, err := s.Provider.Chat(ctx, ai.ChatRequest{
+	provider := s.Provider
+	req := ai.ChatRequest{
 		Messages: []ai.Message{
 			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: prompt},
 		},
 		Temperature: 0.3,
 		MaxTokens:   4096,
-	})
+	}
+	ctx, cancel, provider, req := ai.ApplyNodeModelConfig(ctx, provider, s.Selector, s.ModelResolver, ai.AppScheduling, ai.WorkflowScheduleCreate, ai.NodeAISelect, req, 180*time.Second, logger)
+	defer cancel()
+
+	resp, err := provider.Chat(ctx, req)
 	if err != nil {
 		logger.Error("AI 选人调用失败", zap.Error(err))
 		return nil // 不中断 pipeline，后续 PhaseTwo 会兜底

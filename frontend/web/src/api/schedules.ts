@@ -120,48 +120,6 @@ export function batchDeleteSchedule(data: { employee_ids: string[], dates: strin
   return client.post('/scheduling/assignments/batch/delete', data)
 }
 
-// ==================== Session 排班 API（AI 工作流） ====================
-
-/** 获取最近会话 */
-export function getRecentSession() {
-  return client.get('/sessions/recent').then(r => r.data)
-}
-
-/** 创建会话 */
-export function createSession(data: { agent_type: string, title?: string, locale?: string }) {
-  return client.post('/sessions/', data).then(r => r.data)
-}
-
-/** 获取会话消息 */
-export function getSessionMessages(sessionId: string) {
-  return client.get(`/sessions/${sessionId}/messages`).then(r => r.data)
-}
-
-/** 获取会话快照 */
-export function getSessionSnapshot(sessionId: string) {
-  return client.get(`/sessions/${sessionId}/snapshot`).then(r => r.data)
-}
-
-/** 发送消息 */
-export function sendSessionMessage(sessionId: string, content: string) {
-  return client.post(`/sessions/${sessionId}/messages`, { content }).then(r => r.data)
-}
-
-/** 定稿会话 */
-export function finalizeSession(sessionId: string) {
-  return client.post(`/sessions/${sessionId}/finalize`).then(r => r.data)
-}
-
-/** 发送工作流命令 */
-export function sendWorkflowCommand(sessionId: string, event: string, payload?: Record<string, unknown>) {
-  return client.post(`/sessions/${sessionId}/workflow`, { event, payload }).then(r => r.data)
-}
-
-/** 列出对话历史 */
-export function listConversations() {
-  return client.get('/sessions/conversations').then(r => r.data)
-}
-
 /** 排班导出 */
 export function exportSchedule(params: { start_date: string, end_date: string, format?: string }) {
   return client.get('/scheduling/export', { params, responseType: 'blob' })

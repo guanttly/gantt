@@ -71,13 +71,15 @@ func ApplyScopeOnColumn(ctx context.Context, db *gorm.DB, column string) *gorm.D
 
 // platformTables 平台级表白名单，不需要 org_node_id 条件。
 var platformTables = map[string]bool{
-	"org_nodes":        true,
-	"platform_users":   true,
-	"user_node_roles":  true,
-	"ai_model_configs": true,
-	"subscriptions":    true,
-	"audit_logs":       true,
-	"system_configs":   true,
+	"org_nodes":            true,
+	"platform_users":       true,
+	"user_node_roles":      true,
+	"app_configs":          true,
+	"app_workflow_configs": true,
+	"ai_model_configs":     true,
+	"subscriptions":        true,
+	"audit_logs":           true,
+	"system_configs":       true,
 }
 
 // RegisterTenantGuard 注册 GORM Callback，检测所有查询是否携带 org_node_id 条件。

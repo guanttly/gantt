@@ -36,7 +36,10 @@ export const RootRoute: RouteRecordRaw[] = [{
       path: 'scheduling/workspace',
       name: 'SchedulingWorkspace',
       component: () => import('@/views/scheduling/SchedulingWorkspace.vue'),
-      meta: { title: () => '排班工作台', requiredPermission: 'schedule:execute' },
+      meta: {
+        title: () => '手工调整工作台',
+        requiredAnyPermissions: ['schedule:view:node', 'schedule:view:all', 'schedule:adjust', 'schedule:execute', 'schedule:publish'],
+      },
     },
     {
       path: 'scheduling/create',

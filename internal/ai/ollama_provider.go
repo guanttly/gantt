@@ -20,6 +20,7 @@ type OllamaProvider struct {
 	client  *http.Client
 	baseURL string
 	model   string
+	timeout time.Duration
 	logger  *zap.Logger
 }
 
@@ -31,11 +32,10 @@ func NewOllamaProvider(cfg *config.AIProviderConfig, logger *zap.Logger) (*Ollam
 	}
 
 	return &OllamaProvider{
-		client: &http.Client{
-			Timeout: 300 * time.Second,
-		},
+		client:  &http.Client{},
 		baseURL: strings.TrimRight(baseURL, "/"),
 		model:   cfg.Model,
+		timeout: NormalizeTimeout(cfg.Timeout, 300*time.Second),
 		logger:  logger.Named("ollama"),
 	}, nil
 }
@@ -60,6 +60,9 @@ type ollamaChatResp struct {
 }
 
 func (p *OllamaProvider) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	ctx, cancel := WithProviderTimeout(ctx, p.timeout)
+	defer cancel()
+
 	model := req.Model
 	if model == "" {
 		model = p.model
@@ -123,6 +126,8 @@ func (p *OllamaProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 }
 
 func (p *OllamaProvider) ChatStream(ctx context.Context, req ChatRequest) (<-chan StreamChunk, error) {
+	ctx, cancel := WithProviderTimeout(ctx, p.timeout)
+
 	model := req.Model
 	if model == "" {
 		model = p.model
@@ -153,6 +158,7 @@ func (p *OllamaProvider) ChatStream(ctx context.Context, req ChatRequest) (<-cha
 	ch := make(chan StreamChunk, 10)
 
 	go func() {
+		defer cancel()
 		defer close(ch)
 
 		resp, err := p.client.Do(httpReq)

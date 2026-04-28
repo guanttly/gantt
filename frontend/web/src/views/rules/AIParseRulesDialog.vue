@@ -796,7 +796,7 @@ function formatConfig(config?: Record<string, unknown>) {
 
 function normalizeShiftCatalog(shifts: Shift[]): ShiftCatalogItem[] {
   return shifts
-    .filter(shift => Boolean(shift.code?.trim()) && Boolean(shift.name?.trim()) && (shift.is_active ?? shift.status === 'active' ?? true))
+    .filter(shift => Boolean(shift.code?.trim()) && Boolean(shift.name?.trim()) && shift.is_active && shift.status !== 'disabled')
     .map((shift) => {
       const aliases = Array.from(new Set([
         shift.name.trim(),
@@ -1224,7 +1224,7 @@ function handleClose() {
                     allow-create
                     default-first-option
                     style="width: 100%"
-                    @update:model-value="value => setEditShiftList($index, 'subject_shifts', value)"
+                    @update:model-value="setEditShiftList($index, 'subject_shifts', $event)"
                   >
                     <el-option v-for="option in shiftOptions" :key="option.value" :label="option.label" :value="option.value" />
                   </el-select>
@@ -1237,7 +1237,7 @@ function handleClose() {
                     allow-create
                     default-first-option
                     style="width: 100%"
-                    @update:model-value="value => setEditShiftList($index, 'object_shifts', value)"
+                    @update:model-value="setEditShiftList($index, 'object_shifts', $event)"
                   >
                     <el-option v-for="option in shiftOptions" :key="option.value" :label="option.label" :value="option.value" />
                   </el-select>
@@ -1250,7 +1250,7 @@ function handleClose() {
                     allow-create
                     default-first-option
                     style="width: 100%"
-                    @update:model-value="value => setEditShiftList($index, 'target_shifts', value)"
+                    @update:model-value="setEditShiftList($index, 'target_shifts', $event)"
                   >
                     <el-option v-for="option in shiftOptions" :key="option.value" :label="option.label" :value="option.value" />
                   </el-select>
@@ -1259,7 +1259,7 @@ function handleClose() {
                   <el-select
                     :model-value="editForm[$index].scope_type"
                     style="width: 100%"
-                    @update:model-value="value => setEditScopeType($index, value)"
+                    @update:model-value="setEditScopeType($index, $event)"
                   >
                     <el-option v-for="(label, val) in scopeTypeMap" :key="val" :label="label" :value="val" />
                   </el-select>
@@ -1272,7 +1272,7 @@ function handleClose() {
                     collapse-tags
                     collapse-tags-tooltip
                     style="width: 100%"
-                    @update:model-value="value => setEditScopeList($index, 'scope_employees', value)"
+                    @update:model-value="setEditScopeList($index, 'scope_employees', $event)"
                   >
                     <el-option
                       v-for="option in mergeSelectOptions(employeeOptions, editForm[$index].scope_employees || [])"
@@ -1290,7 +1290,7 @@ function handleClose() {
                     collapse-tags
                     collapse-tags-tooltip
                     style="width: 100%"
-                    @update:model-value="value => setEditScopeList($index, 'scope_groups', value)"
+                    @update:model-value="setEditScopeList($index, 'scope_groups', $event)"
                   >
                     <el-option
                       v-for="option in mergeSelectOptions(groupOptions, editForm[$index].scope_groups || [])"
@@ -1313,7 +1313,7 @@ function handleClose() {
                           allow-create
                           default-first-option
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'shift_ids', value)"
+                          @update:model-value="setEditConfigValue($index, 'shift_ids', $event)"
                         >
                           <el-option v-for="option in shiftOptions" :key="option.value" :label="option.label" :value="option.value" />
                         </el-select>
@@ -1322,7 +1322,7 @@ function handleClose() {
                         <el-select
                           :model-value="getConfigText(editForm[$index], 'scope')"
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'scope', value)"
+                          @update:model-value="setEditConfigValue($index, 'scope', $event)"
                         >
                           <el-option label="同日互斥" value="same_day" />
                           <el-option label="连续互斥" value="consecutive" />
@@ -1339,7 +1339,7 @@ function handleClose() {
                           default-first-option
                           clearable
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'shift_id', value)"
+                          @update:model-value="setEditConfigValue($index, 'shift_id', $event)"
                         >
                           <el-option v-for="option in shiftOptions" :key="option.value" :label="option.label" :value="option.value" />
                         </el-select>
@@ -1349,14 +1349,14 @@ function handleClose() {
                           :model-value="getConfigNumber(editForm[$index], 'max')"
                           :min="0"
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'max', value)"
+                          @update:model-value="setEditConfigValue($index, 'max', $event)"
                         />
                       </el-form-item>
                       <el-form-item label="统计周期" label-width="92px" class="nested-form-item">
                         <el-select
                           :model-value="getConfigText(editForm[$index], 'period')"
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'period', value)"
+                          @update:model-value="setEditConfigValue($index, 'period', $event)"
                         >
                           <el-option label="按天" value="day" />
                           <el-option label="按周" value="week" />
@@ -1371,7 +1371,7 @@ function handleClose() {
                           :model-value="getConfigNumber(editForm[$index], 'days') ?? getConfigNumber(editForm[$index], 'min_rest_days')"
                           :min="0"
                           style="width: 100%"
-                          @update:model-value="value => { setEditConfigValue($index, 'days', value); setEditConfigValue($index, 'min_rest_days', value) }"
+                          @update:model-value="setEditConfigValue($index, 'days', $event); setEditConfigValue($index, 'min_rest_days', $event)"
                         />
                       </el-form-item>
                       <el-form-item label="休息小时" label-width="92px" class="nested-form-item">
@@ -1379,13 +1379,13 @@ function handleClose() {
                           :model-value="getConfigNumber(editForm[$index], 'min_rest_hours')"
                           :min="0"
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'min_rest_hours', value)"
+                          @update:model-value="setEditConfigValue($index, 'min_rest_hours', $event)"
                         />
                       </el-form-item>
                       <el-form-item label="连续休息" label-width="92px" class="nested-form-item">
                         <el-switch
                           :model-value="getConfigBoolean(editForm[$index], 'must_consecutive')"
-                          @update:model-value="value => setEditConfigValue($index, 'must_consecutive', value)"
+                          @update:model-value="setEditConfigValue($index, 'must_consecutive', $event)"
                         />
                       </el-form-item>
                     </template>
@@ -1399,7 +1399,7 @@ function handleClose() {
                           collapse-tags
                           collapse-tags-tooltip
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'employee_ids', uniqueTextList(value))"
+                          @update:model-value="setEditConfigValue($index, 'employee_ids', uniqueTextList($event))"
                         >
                           <el-option
                             v-for="option in mergeSelectOptions(employeeOptions, getConfigStringArray(editForm[$index], 'employee_ids'))"
@@ -1417,7 +1417,7 @@ function handleClose() {
                           default-first-option
                           clearable
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'shift_id', value)"
+                          @update:model-value="setEditConfigValue($index, 'shift_id', $event)"
                         >
                           <el-option v-for="option in shiftOptions" :key="option.value" :label="option.label" :value="option.value" />
                         </el-select>
@@ -1431,7 +1431,7 @@ function handleClose() {
                           filterable
                           clearable
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'employee_id', typeof value === 'string' ? value.trim() : '')"
+                          @update:model-value="setEditConfigValue($index, 'employee_id', typeof $event === 'string' ? $event.trim() : '')"
                         >
                           <el-option
                             v-for="option in mergeSelectOptions(employeeOptions, [getConfigText(editForm[$index], 'employee_id')])"
@@ -1449,7 +1449,7 @@ function handleClose() {
                           default-first-option
                           clearable
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'shift_id', value)"
+                          @update:model-value="setEditConfigValue($index, 'shift_id', $event)"
                         >
                           <el-option v-for="option in shiftOptions" :key="option.value" :label="option.label" :value="option.value" />
                         </el-select>
@@ -1460,7 +1460,7 @@ function handleClose() {
                           :min="0"
                           :max="100"
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'weight', value)"
+                          @update:model-value="setEditConfigValue($index, 'weight', $event)"
                         />
                       </el-form-item>
                     </template>
@@ -1474,7 +1474,7 @@ function handleClose() {
                           default-first-option
                           clearable
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'target_shift_id', value)"
+                          @update:model-value="setEditConfigValue($index, 'target_shift_id', $event)"
                         >
                           <el-option v-for="option in shiftOptions" :key="option.value" :label="option.label" :value="option.value" />
                         </el-select>
@@ -1487,7 +1487,7 @@ function handleClose() {
                           default-first-option
                           clearable
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'source_shift_id', value)"
+                          @update:model-value="setEditConfigValue($index, 'source_shift_id', $event)"
                         >
                           <el-option v-for="option in shiftOptions" :key="option.value" :label="option.label" :value="option.value" />
                         </el-select>
@@ -1503,7 +1503,7 @@ function handleClose() {
                           default-first-option
                           clearable
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'before_shift_id', value)"
+                          @update:model-value="setEditConfigValue($index, 'before_shift_id', $event)"
                         >
                           <el-option v-for="option in shiftOptions" :key="option.value" :label="option.label" :value="option.value" />
                         </el-select>
@@ -1516,7 +1516,7 @@ function handleClose() {
                           default-first-option
                           clearable
                           style="width: 100%"
-                          @update:model-value="value => setEditConfigValue($index, 'after_shift_id', value)"
+                          @update:model-value="setEditConfigValue($index, 'after_shift_id', $event)"
                         >
                           <el-option v-for="option in shiftOptions" :key="option.value" :label="option.label" :value="option.value" />
                         </el-select>

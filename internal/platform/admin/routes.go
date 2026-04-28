@@ -5,7 +5,7 @@ import (
 )
 
 // RegisterRoutes 注册平台超级管理员路由到 /api/v1/admin/*。
-func RegisterRoutes(r chi.Router, dashHandler *DashboardHandler, sysHandler *SystemConfigHandler, orgHandler *OrganizationHandler) {
+func RegisterRoutes(r chi.Router, dashHandler *DashboardHandler, sysHandler *SystemConfigHandler, appConfigHandler *AppConfigHandler, orgHandler *OrganizationHandler) {
 	r.Get("/admin/dashboard", dashHandler.GetDashboard)
 	r.Route("/admin/organizations", func(r chi.Router) {
 		r.Get("/", orgHandler.List)
@@ -17,6 +17,12 @@ func RegisterRoutes(r chi.Router, dashHandler *DashboardHandler, sysHandler *Sys
 	r.Route("/admin/system", func(r chi.Router) {
 		r.Get("/config", sysHandler.GetConfig)
 		r.Put("/config", sysHandler.UpdateConfig)
+	})
+	r.Route("/admin/app-config", func(r chi.Router) {
+		r.Get("/apps", appConfigHandler.ListApps)
+		r.Put("/apps/{appCode}/settings", appConfigHandler.UpdateSettings)
+		r.Put("/apps/{appCode}/workflows/{workflowKey}", appConfigHandler.UpdateWorkflow)
+		r.Put("/apps/{appCode}/workflows/{workflowKey}/nodes/{nodeKey}/model", appConfigHandler.UpdateNodeModel)
 	})
 }
 

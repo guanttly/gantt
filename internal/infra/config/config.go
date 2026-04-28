@@ -142,7 +142,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 8080)
 	v.SetDefault("server.mode", "development")
 	v.SetDefault("server.read_timeout", "15s")
-	v.SetDefault("server.write_timeout", "15s")
+	v.SetDefault("server.write_timeout", "120s")
 	v.SetDefault("server.shutdown_timeout", "10s")
 
 	// Database
@@ -167,6 +167,9 @@ func setDefaults(v *viper.Viper) {
 
 	// AI
 	v.SetDefault("ai.enabled", false)
+	v.SetDefault("ai.openai.timeout", "60s")
+	v.SetDefault("ai.bailian.timeout", "60s")
+	v.SetDefault("ai.ollama.timeout", "300s")
 
 	// JWT
 	v.SetDefault("jwt.secret", "gantt-saas-secret-change-me")

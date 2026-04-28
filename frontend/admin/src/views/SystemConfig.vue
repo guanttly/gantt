@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { NButton, NDivider, NForm, NFormItem, NInput, NInputNumber, NSelect, NSpin, NSwitch, useDialog, useMessage } from 'naive-ui'
+import { NButton, NDivider, NForm, NFormItem, NInput, NSelect, NSpin, NSwitch, useDialog, useMessage } from 'naive-ui'
 import { getSystemConfig, updateSystemConfig } from '@/api/admin'
 
 const loading = ref(true)
@@ -14,8 +14,6 @@ const config = ref<Record<string, string>>({
   ai_model: '',
   ai_api_key: '',
   ai_base_url: '',
-  schedule_auto_publish: 'false',
-  schedule_lock_days: '3',
   system_name: '',
   system_logo: '',
 })
@@ -26,10 +24,6 @@ function toBool(value: string) {
 
 function setBool(key: string, value: boolean) {
   config.value[key] = String(value)
-}
-
-function setNumber(key: string, value: number | undefined) {
-  config.value[key] = String(value ?? 0)
 }
 
 async function loadConfig() {
@@ -84,7 +78,7 @@ onMounted(loadConfig)
       <section class="page-header">
         <div>
           <h2 class="page-title">系统配置</h2>
-          <p class="page-subtitle">这里维护平台级运行参数，保存时仅提交本页可控配置键。</p>
+          <p class="page-subtitle">这里维护平台级运行参数，排班设置与工作流已迁移到应用配置。</p>
         </div>
       </section>
 
@@ -96,7 +90,7 @@ onMounted(loadConfig)
             </template>
 
             <n-form label-placement="left" label-width="140" class="config-form">
-              <h3 class="section-title">AI 配置</h3>
+              <h3 class="section-title">平台 AI 默认配置</h3>
               <n-form-item label="启用 AI">
                 <n-switch :value="toBool(config.ai_enabled)" @update:value="setBool('ai_enabled', $event)" />
               </n-form-item>
@@ -119,16 +113,6 @@ onMounted(loadConfig)
               </n-form-item>
               <n-form-item label="Base URL">
                 <n-input v-model:value="config.ai_base_url" style="width: 320px" placeholder="可选" />
-              </n-form-item>
-
-              <n-divider />
-
-              <h3 class="section-title">排班配置</h3>
-              <n-form-item label="自动发布排班">
-                <n-switch :value="toBool(config.schedule_auto_publish)" @update:value="setBool('schedule_auto_publish', $event)" />
-              </n-form-item>
-              <n-form-item label="锁定天数">
-                <n-input-number :value="Number(config.schedule_lock_days || 0)" :min="0" :max="30" @update:value="setNumber('schedule_lock_days', $event ?? undefined)" />
               </n-form-item>
 
               <n-divider />

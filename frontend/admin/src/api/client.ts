@@ -33,7 +33,7 @@ function isAuthEntryRequest(url?: string): boolean {
   return url.includes('/admin/auth/login') || url.includes('/auth/refresh')
 }
 
-function extractErrorMessage(payload: unknown): string | null {
+export function extractErrorMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== 'object') {
     return null
   }

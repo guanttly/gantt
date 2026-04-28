@@ -64,6 +64,12 @@ const router = createRouter({
           component: () => import('@/views/SystemConfig.vue'),
           meta: { title: '系统配置', requiredRole: RoleName.PlatformAdmin },
         },
+        {
+          path: 'app-config',
+          name: 'AppConfig',
+          component: () => import('@/views/AppConfig.vue'),
+          meta: { title: '应用配置', requiredRole: RoleName.PlatformAdmin },
+        },
       ],
     },
     {

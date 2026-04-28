@@ -21,6 +21,8 @@ type AIAssistedDeps struct {
 	GroupMemberProvider step.GroupMemberProvider
 	DraftSaver          step.DraftSaver
 	AIProvider          ai.Provider
+	ProviderSelector    ai.ProviderSelector
+	ModelResolver       ai.NodeModelResolver
 	Broadcaster         websocket.Broadcaster // 可选
 	Logger              *zap.Logger
 }
@@ -41,8 +43,10 @@ func NewAIAssistedPipeline(deps *AIAssistedDeps) *Pipeline {
 		&step.PhaseZeroStep{FixedAssignmentProvider: deps.ShiftService},
 		&step.PhaseOneStep{},
 		&step.AISelectStep{
-			Provider: deps.AIProvider,
-			Logger:   deps.Logger,
+			Provider:      deps.AIProvider,
+			Selector:      deps.ProviderSelector,
+			ModelResolver: deps.ModelResolver,
+			Logger:        deps.Logger,
 		},
 		&step.PhaseTwoStep{}, // 兜底填充 AI 未覆盖的空缺
 		&step.FullValidationStep{},
