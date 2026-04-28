@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { AIModelConfigView, AppConfigView, WorkflowConfigView, WorkflowNodeView } from '@/api/admin'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { NButton, NForm, NFormItem, NInput, NInputNumber, NSelect, NSwitch, NTag, useMessage } from 'naive-ui'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { listAppConfigs, updateAppSettings, updateAppWorkflow, updateWorkflowNodeModel } from '@/api/admin'
 
 const message = useMessage()
@@ -198,7 +198,9 @@ onMounted(loadApps)
     <div class="page-container">
       <section class="page-header">
         <div>
-          <h2 class="page-title">应用配置</h2>
+          <h2 class="page-title">
+            应用配置
+          </h2>
           <p class="page-subtitle">
             管理应用级排班设置、工作流启停与节点模型。
             <template v-if="selectedApp">
@@ -213,7 +215,9 @@ onMounted(loadApps)
           <section class="app-sidebar page-card rail-card">
             <div class="rail-card-inner">
               <div class="rail-card-header">
-                <h3 class="rail-title">应用</h3>
+                <h3 class="rail-title">
+                  应用
+                </h3>
                 <span class="rail-meta">{{ apps.length }}</span>
               </div>
               <div class="app-sidebar-inner">
@@ -235,7 +239,9 @@ onMounted(loadApps)
           <section v-if="selectedApp" class="workflow-list page-card rail-card">
             <div class="rail-card-inner">
               <div class="rail-card-header">
-                <h3 class="rail-title">工作流</h3>
+                <h3 class="rail-title">
+                  工作流
+                </h3>
                 <span class="rail-meta">{{ selectedApp.workflows.length }}</span>
               </div>
               <div class="workflow-list-inner">
@@ -266,10 +272,18 @@ onMounted(loadApps)
                 </div>
               </div>
               <div class="action-dock-actions">
-                <n-button size="small" :loading="loading" @click="loadApps">刷新</n-button>
-                <n-button size="small" type="primary" :loading="savingSettings" @click="saveSettings">保存应用设置</n-button>
-                <n-button v-if="selectedWorkflow" size="small" secondary type="primary" :loading="savingWorkflow" @click="saveWorkflow">保存工作流</n-button>
-                <n-button v-if="selectedNode?.configurable" size="small" secondary type="primary" :loading="savingModel" @click="saveNodeModel">保存节点模型</n-button>
+                <NButton size="small" :loading="loading" @click="loadApps">
+                  刷新
+                </NButton>
+                <NButton size="small" type="primary" :loading="savingSettings" @click="saveSettings">
+                  保存应用设置
+                </NButton>
+                <NButton v-if="selectedWorkflow" size="small" secondary type="primary" :loading="savingWorkflow" @click="saveWorkflow">
+                  保存工作流
+                </NButton>
+                <NButton v-if="selectedNode?.configurable" size="small" secondary type="primary" :loading="savingModel" @click="saveNodeModel">
+                  保存节点模型
+                </NButton>
               </div>
             </div>
           </section>
@@ -277,18 +291,22 @@ onMounted(loadApps)
           <section class="page-card app-settings-panel compact-panel">
             <div class="overview-head">
               <div>
-                <p class="panel-subtitle">{{ selectedApp.description }}</p>
+                <p class="panel-subtitle">
+                  {{ selectedApp.description }}
+                </p>
               </div>
-              <div class="inline-meta-chip">{{ selectedApp.workflows.length }} 套工作流</div>
+              <div class="inline-meta-chip">
+                {{ selectedApp.workflows.length }} 套工作流
+              </div>
             </div>
             <div class="settings-grid">
               <label class="setting-row">
                 <span>自动发布排班</span>
-                <n-switch :value="isTrue(selectedApp.settings.schedule_auto_publish)" @update:value="setBoolSetting('schedule_auto_publish', $event)" />
+                <NSwitch :value="isTrue(selectedApp.settings.schedule_auto_publish)" @update:value="setBoolSetting('schedule_auto_publish', $event)" />
               </label>
               <label class="setting-row">
                 <span>锁定天数</span>
-                <n-input-number :value="Number(selectedApp.settings.schedule_lock_days || 0)" :min="0" :max="90" @update:value="setNumberSetting('schedule_lock_days', $event)" />
+                <NInputNumber :value="Number(selectedApp.settings.schedule_lock_days || 0)" :min="0" :max="90" @update:value="setNumberSetting('schedule_lock_days', $event)" />
               </label>
             </div>
           </section>
@@ -298,13 +316,17 @@ onMounted(loadApps)
               <div class="workflow-main-inner">
                 <div class="panel-header workflow-header">
                   <div>
-                    <h3 class="panel-title">{{ selectedWorkflow.name }}</h3>
-                    <p class="panel-subtitle">{{ selectedWorkflow.description }}</p>
+                    <h3 class="panel-title">
+                      {{ selectedWorkflow.name }}
+                    </h3>
+                    <p class="panel-subtitle">
+                      {{ selectedWorkflow.description }}
+                    </p>
                   </div>
                   <div class="workflow-actions">
                     <div class="workflow-toggle-state">
                       <span class="workflow-toggle-label">{{ selectedWorkflow.enabled ? '已启用' : '已停用' }}</span>
-                      <n-switch v-model:value="selectedWorkflow.enabled" />
+                      <NSwitch v-model:value="selectedWorkflow.enabled" />
                     </div>
                   </div>
                 </div>
@@ -344,7 +366,7 @@ onMounted(loadApps)
                         >
                           <span class="flow-node-topline">
                             <span class="flow-node-name">{{ node.name }}</span>
-                            <n-tag size="small" :type="node.kind === 'llm' ? 'success' : 'default'">{{ node.kind === 'llm' ? '模型' : '系统' }}</n-tag>
+                            <NTag size="small" :type="node.kind === 'llm' ? 'success' : 'default'">{{ node.kind === 'llm' ? '模型' : '系统' }}</NTag>
                           </span>
                           <span class="flow-node-subtitle">{{ nodeSubtitle(node) }}</span>
                         </button>
@@ -357,13 +379,23 @@ onMounted(loadApps)
                 <section v-if="selectedNode" class="node-detail-panel">
                   <div class="panel-header compact node-detail-header">
                     <div>
-                      <div class="node-detail-eyebrow">节点详情</div>
-                      <h3 class="panel-title">{{ selectedNode.name }}</h3>
-                      <p class="panel-subtitle">{{ selectedNode.description }}</p>
+                      <div class="node-detail-eyebrow">
+                        节点详情
+                      </div>
+                      <h3 class="panel-title">
+                        {{ selectedNode.name }}
+                      </h3>
+                      <p class="panel-subtitle">
+                        {{ selectedNode.description }}
+                      </p>
                     </div>
                     <div class="node-tags">
-                      <n-tag :type="selectedNode.kind === 'llm' ? 'success' : 'default'">{{ selectedNodeKindLabel(selectedNode) }}</n-tag>
-                      <n-tag v-if="selectedNode.configurable" type="info">可配置</n-tag>
+                      <NTag :type="selectedNode.kind === 'llm' ? 'success' : 'default'">
+                        {{ selectedNodeKindLabel(selectedNode) }}
+                      </NTag>
+                      <NTag v-if="selectedNode.configurable" type="info">
+                        可配置
+                      </NTag>
                     </div>
                   </div>
 
@@ -372,34 +404,36 @@ onMounted(loadApps)
                   </div>
 
                   <div v-if="selectedNode.configurable" class="node-config-card">
-                    <n-form label-placement="top" class="node-form node-form-grid">
-                      <n-form-item label="启用节点配置">
-                        <n-switch v-model:value="modelForm.enabled" />
-                      </n-form-item>
-                      <n-form-item label="AI 提供商">
-                        <n-select v-model:value="modelForm.provider" :options="providerOptions" />
-                      </n-form-item>
-                      <n-form-item label="模型">
-                        <n-input v-model:value="modelForm.model" placeholder="留空则继承默认模型" />
-                      </n-form-item>
-                      <n-form-item label="超时时间（秒）">
-                        <n-input-number v-model:value="modelForm.timeout_seconds" :min="5" :max="600" />
-                      </n-form-item>
-                      <n-form-item label="Temperature">
-                        <n-input-number v-model:value="modelForm.temperature" :min="0" :max="2" :step="0.1" clearable />
-                      </n-form-item>
-                      <n-form-item label="Max Tokens">
-                        <n-input-number v-model:value="modelForm.max_tokens" :min="0" :max="32000" />
-                      </n-form-item>
-                    </n-form>
+                    <NForm label-placement="top" class="node-form node-form-grid">
+                      <NFormItem label="启用节点配置">
+                        <NSwitch v-model:value="modelForm.enabled" />
+                      </NFormItem>
+                      <NFormItem label="AI 提供商">
+                        <NSelect v-model:value="modelForm.provider" :options="providerOptions" />
+                      </NFormItem>
+                      <NFormItem label="模型">
+                        <NInput v-model:value="modelForm.model" placeholder="留空则继承默认模型" />
+                      </NFormItem>
+                      <NFormItem label="超时时间（秒）">
+                        <NInputNumber v-model:value="modelForm.timeout_seconds" :min="5" :max="600" />
+                      </NFormItem>
+                      <NFormItem label="Temperature">
+                        <NInputNumber v-model:value="modelForm.temperature" :min="0" :max="2" :step="0.1" clearable />
+                      </NFormItem>
+                      <NFormItem label="Max Tokens">
+                        <NInputNumber v-model:value="modelForm.max_tokens" :min="0" :max="32000" />
+                      </NFormItem>
+                    </NForm>
 
                     <div class="node-config-footer">
-                      <p class="node-config-note">留空表示继承应用默认 Provider 或模型。这里只配置该节点的调用策略，不改变确定性业务规则。</p>
+                      <p class="node-config-note">
+                        留空表示继承应用默认 Provider 或模型。这里只配置该节点的调用策略，不改变确定性业务规则。
+                      </p>
                     </div>
                   </div>
 
                   <div v-else class="system-node-note">
-                    <n-tag>系统节点</n-tag>
+                    <NTag>系统节点</NTag>
                     <p>该节点由排班引擎执行，不调用大模型。</p>
                   </div>
                 </section>
@@ -413,7 +447,6 @@ onMounted(loadApps)
 </template>
 
 <style scoped>
-
 .page-shell {
   --app-config-header-stack-offset: 68px;
 }
